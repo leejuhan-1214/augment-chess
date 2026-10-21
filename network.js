@@ -1,4 +1,4 @@
-const PREFIX='augmentchess-v1-';
+const PREFIX='augmentchess-v2-';
 export function roomCode(){const bytes=crypto.getRandomValues(new Uint8Array(8)),chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from(bytes,n=>chars[n%chars.length]).join('');}
 // No accounts or camera/microphone permissions. Only the game travels over a data channel.
 export class OnlineRoom {
@@ -9,7 +9,7 @@ export class OnlineRoom {
     this.peer.on('open',()=>{if(this.closed)return;this.emit('ready',code);if(!host)this.connect();});
     this.peer.on('connection',conn=>{if(!host||this.closed){conn.close();return;}
       const token=conn.metadata?.token;
-      if(conn.metadata?.app!=='augment-chess-v1'||typeof token!=='string'||token.length>80||!token||(this.guestToken&&this.guestToken!==token)||(this.conn?.open)){
+      if(conn.metadata?.app!=='augment-chess-v2'||typeof token!=='string'||token.length>80||!token||(this.guestToken&&this.guestToken!==token)||(this.conn?.open)){
         conn.on('open',()=>{conn.send({type:'busy'});setTimeout(()=>conn.close(),300);});return;
       }
       this.guestToken=token;this.bind(conn);
@@ -25,7 +25,7 @@ export class OnlineRoom {
   }
   on(name,fn){(this.listeners[name]??=[]).push(fn);return this;}
   emit(name,data){if(!this.closed)for(const fn of this.listeners[name]||[])fn(data);}
-  connect(){if(this.closed||this.host)return;if(this.conn?.open)return;this.bind(this.peer.connect(PREFIX+this.code,{reliable:true,serialization:'json',metadata:{app:'augment-chess-v1',token:this.token}}));}
+  connect(){if(this.closed||this.host)return;if(this.conn?.open)return;this.bind(this.peer.connect(PREFIX+this.code,{reliable:true,serialization:'json',metadata:{app:'augment-chess-v2',token:this.token}}));}
   bind(conn){this.conn=conn;clearTimeout(this.timer);this.timer=setTimeout(()=>{if(!this.live)this.emit('error','연결 시간이 초과됐습니다. 방 코드와 네트워크를 확인한 뒤 다시 연결해 주세요.');},20000);
     conn.on('open',()=>{if(this.closed)return;clearTimeout(this.timer);this.live=true;this.emit('connected');});
     conn.on('data',data=>{if(this.closed||conn!==this.conn||!data||typeof data!=='object')return;if(data.type==='busy'){this.live=false;this.emit('error','이미 진행 중인 방입니다. 다른 방 코드를 이용해 주세요.');return;}this.emit('data',data);});

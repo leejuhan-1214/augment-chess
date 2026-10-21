@@ -1,0 +1,53 @@
+/* Active abilities share the compact game shell. */
+#match-details { display:inline-block; }
+.captured { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+body[data-playing="true"] #room-panel { padding:10px; flex-shrink:0; }
+body[data-playing="true"] #room-panel > .section-label,
+body[data-playing="true"] #room-panel h2,
+body[data-playing="true"] #room-panel .network-note,
+body[data-playing="true"] #room-code-box > small { display:none; }
+body[data-playing="true"] #connection-status { font-size:8px; line-height:1.5; margin:0 0 6px; }
+body[data-playing="true"] #room-code-box { margin:0; padding:0; border:0; }
+body[data-playing="true"] .room-code { font-size:20px; margin:0 0 7px; }
+body[data-playing="true"] #copy-link { min-height:28px; padding:4px 7px; font-size:9px; }
+body[data-playing="true"] #copy-code,
+body[data-playing="true"] #leave-room { display:inline-block; font-size:8px; margin:6px 7px 0 0; }
+.augment-panel { flex-shrink:0; }
+.active-card { width:100%; text-align:left; color:var(--text); border:1px solid #71634b; background:#292a24; border-radius:6px; padding:8px 6px; margin-top:8px; }
+.active-card small { color:var(--gold); }
+.active-card.armed { border-color:var(--gold); background:#3e3928; box-shadow:0 0 0 1px var(--gold); }
+.active-card.depleted { opacity:.5; }
+.active-card > span { color:var(--gold); }
+.echo-note { font-size:8px; color:var(--purple); margin:8px 0 0; }
+#skill-hint { font-size:9px; line-height:1.7; margin:10px 0 0; color:var(--gold); }
+#cancel-skill { margin-top:6px; font-size:9px; text-decoration:underline; }
+.sq.skill-target { box-shadow:inset 0 0 0 3px #ffe3a1; }
+.sq.skill-target:after { content:'✦'; position:absolute; right:4px; top:1px; font-size:15px; color:#ffe3a1; text-shadow:0 1px 3px #000; }
+.sq.castle-target { box-shadow:inset 0 0 0 3px #bdd1ff; }
+.effect-badge { position:absolute; z-index:2; right:2px; top:2px; padding:2px 3px; border-radius:3px; background:#17292ee8; color:#ffe3a1; font-size:8px; line-height:1.2; pointer-events:none; }
+.skill-event { color:var(--gold); }
+#castle-controls { padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid var(--border); }
+.castle-buttons { display:flex; gap:6px; margin:7px 0 4px; }
+.castle-button { background:#263630; border:1px solid #72836b; color:var(--green); font-size:11px; font-weight:700; padding:5px 8px; flex:1; }
+.castle-button.unavailable { background:#1b2729; border-color:#3d4948; color:#819392; }
+#castle-controls > small { font-size:8px; color:var(--muted); }
+.catalog-heading { color:var(--gold); padding-bottom:9px; border-bottom:1px solid var(--border); margin-top:25px; }
+.special-info { border-left:2px solid #706246; padding-left:12px; }
+.try-card { color:var(--green); font-size:10px; margin:1px 0 8px; }
+.inspiration-note { font-size:10px!important; color:var(--muted); border-top:1px solid var(--border); padding-top:14px; }
+.draft-card:has(.card-top) p { font-size:10px; line-height:1.65; }
+@media(max-height:620px) and (min-width:761px) {
+  #castle-controls { margin-bottom:7px; padding-bottom:7px; }
+  .castle-buttons { margin-top:5px; }
+  #skill-hint { font-size:8px; margin-top:6px; }
+}
+@media(max-width:760px) {
+  .active-card { padding:4px; margin-top:4px; }
+  .active-card small { display:block; font-size:7px; margin-top:1px; }
+  .active-card > span { width:19px; height:20px; font-size:18px; }
+  #skill-hint { font-size:7px; line-height:1.4; margin-top:5px; }
+  #cancel-skill { font-size:8px; margin-top:2px; }
+  .effect-badge { font-size:6px; padding:1px 2px; }
+  .sq.skill-target:after { font-size:11px; }
+  .draft-card:has(.card-top) p { font-size:9px; line-height:1.55; }
+}

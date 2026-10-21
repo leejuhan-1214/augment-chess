@@ -17,6 +17,18 @@ class FakePeer extends EventEmitter{
 }
 const tick=()=>new Promise(resolve=>setTimeout(resolve,15));
 const create=(host,code,token)=>new OnlineRoom({host,code,token,PeerClass:FakePeer});
+
+test('ability rooms use the v2 namespace and refuse legacy protocol metadata',async()=>{
+  const host=create(true,'VERSION2'),legacy=new FakePeer('legacy-client');
+  assert.equal(host.peer.id,'augmentchess-v2-VERSION2');
+  assert.equal(peers.has('augmentchess-v1-VERSION2'),false);
+  const conn=legacy.connect(host.peer.id,{metadata:{app:'augment-chess-v1',token:'legacy-token'}});
+  let response;conn.on('data',data=>response=data);await tick();
+  assert.equal(response?.type,'busy');assert.equal(host.live,false);assert.equal(host.guestToken,null);
+  const guest=create(false,'VERSION2','current-token');await tick();
+  assert.equal(guest.conn.metadata.app,'augment-chess-v2');assert.equal(host.live,true);assert.equal(guest.live,true);
+  host.destroy();guest.destroy();legacy.destroy();conn.close();
+});
 test('room codes are 8 URL-safe characters and vary',()=>{const a=roomCode(),b=roomCode();assert.match(a,/^[A-Z2-9]{8}$/);assert.notEqual(a,b);});
 test('real protocol over paired channels syncs draft and moves, rejecting stale moves',async()=>{
   const host=create(true,'TEST0001');let state=createGame(88),client=null;

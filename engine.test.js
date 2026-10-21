@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {position,createGame,legalMoves,applyMove,inCheck,pseudo,reduce,aiMove,CARDS} from './engine.js';
+import {position,createGame,legalMoves,applyMove,inCheck,pseudo,reduce,aiMove,aiAction,legalAbilities,abilityRemaining,effectTags,CARDS} from './engine.js';
 const sq=s=>('8'-s[1])*8+'abcdefgh'.indexOf(s[0]);
 function move(s,from,to,promotion){const m=legalMoves(s).find(m=>m.from===sq(from)&&m.to===sq(to));assert.ok(m,from+'-'+to+' must be legal');return applyMove(s,m,promotion);}
 function empty(){return {...position(),board:Array(64).fill(null),castle:{w:[false,false],b:[false,false]}};}
@@ -18,5 +18,105 @@ test('new drafts at plies 12 and 24; no duplicate offers',()=>{let s=createGame(
 test('standard checkmate, stalemate and draws',()=>{let s={...createGame(1),...position(),phase:'play'};for(const [a,b] of [['f2','f3'],['e7','e5'],['g2','g4'],['d8','h4']])s=reduce(s,{type:'move',from:sq(a),to:sq(b),rev:s.rev},s.turn);assert.equal(s.result.reason,'체크메이트');assert.equal(s.result.winner,'b');let t={...createGame(2),...position(),phase:'play'};t=reduce(t,{type:'draw',rev:t.rev},'w');t=reduce(t,{type:'draw',rev:t.rev},'b');assert.equal(t.result.winner,null);assert.equal(t.result.reason,'합의 무승부');});
 test('third identical position is a draw',()=>{let s={...createGame(1),...position(),phase:'play'};for(let n=0;n<3&&!s.result;n++)for(const [a,b] of [['g1','f3'],['g8','f6'],['f3','g1'],['f6','g8']]){if(s.result)break;s=reduce(s,{type:'move',from:sq(a),to:sq(b),rev:s.rev},s.turn);}assert.equal(s.result?.reason,'동일 포지션 3회 반복');});
 test('AI returns a legal move and takes available mate',()=>{const s=position();const m=aiMove(s);assert.ok(legalMoves(s).some(x=>x.from===m.from&&x.to===m.to));let t=position();for(const [a,b] of [['f2','f3'],['e7','e5'],['g2','g4']])t=move(t,a,b);const mate=aiMove(t);assert.equal(mate.from,sq('d8'));assert.equal(mate.to,sq('h4'));});
-test('same seed and command stream produce identical snapshots',()=>{let a=createGame(900),b=createGame(900);for(const color of ['w','b']){const action={type:'choose',id:a.offers[color][0],rev:a.rev};a=reduce(a,action,color);b=reduce(b,action,color);}for(let i=0;i<6;i++){const m=legalMoves(a)[i];const action={type:'move',...m,rev:a.rev};const color=a.turn;a=reduce(a,action,color);b=reduce(b,action,color);}assert.deepEqual(a,b);assert.equal(CARDS.length,8);});
+test('same seed and command stream produce identical snapshots',()=>{let a=createGame(900),b=createGame(900);for(const color of ['w','b']){const action={type:'choose',id:a.offers[color][0],rev:a.rev};a=reduce(a,action,color);b=reduce(b,action,color);}for(let i=0;i<6;i++){const m=legalMoves(a)[i];const action={type:'move',...m,rev:a.rev};const color=a.turn;a=reduce(a,action,color);b=reduce(b,action,color);}assert.deepEqual(a,b);assert.equal(CARDS.length,16);});
+
+function scenario(cards=[],color='w'){
+  const s={...createGame(12345),...empty(),phase:'play',turn:color};
+  s.board[sq('e1')]={c:'w',t:'k'};s.board[sq('e8')]={c:'b',t:'k'};
+  for(const id of cards){s.aug[color].push(id);const card=CARDS.find(c=>c.id===id);if(card.active)s.uses[color][id]=card.uses;}
+  return s;
+}
+function cast(s,id,to){const a={type:'ability',id,rev:s.rev};if(to!==undefined)a.to=sq(to);const next=reduce(s,a,s.turn);assert.ok(next,`${id} ${to||''} must be legal`);return next;}
+function play(s,from,to){const next=reduce(s,{type:'move',from:sq(from),to:sq(to),rev:s.rev},s.turn);assert.ok(next,`${from}-${to} must be legal`);return next;}
+
+test('active drafts grant bounded charges, and reducer rejects unowned, stale, out-of-turn or malformed abilities',()=>{
+  let s=createGame(9);s.offers.w=['story_wall'];s=reduce(s,{type:'choose',id:'story_wall',rev:s.rev},'w');assert.equal(abilityRemaining(s,'w','story_wall'),2);
+  assert.equal(reduce(s,{type:'ability',id:'story_wall',to:sq('a2'),rev:s.rev},'w'),null);
+  s=reduce(s,{type:'choose',id:s.offers.b[0],rev:s.rev},'b');
+  for(const a of [{id:'grave_call',to:sq('a3')},{id:'story_wall',to:sq('e1')},{id:'story_wall',to:sq('a7')},{id:'story_wall',to:-1},{id:'story_wall',to:'48'},{id:'story_wall'}])assert.equal(reduce(s,{type:'ability',...a,rev:s.rev},'w'),null);
+  assert.equal(reduce(s,{type:'ability',id:'story_wall',to:sq('a2'),rev:s.rev-1},'w'),null);
+  assert.equal(reduce(s,{type:'ability',id:'story_wall',to:sq('a2'),rev:s.rev},'b'),null);
+  const n=cast(s,'story_wall','a2');assert.equal(n.turn,'b');assert.equal(n.ply,1);assert.equal(abilityRemaining(n,'w','story_wall'),1);assert.equal(s.board[sq('a2')].shieldUntil,undefined);
+});
+
+test('reader wall prevents normal and en-passant capture and expires after opponent action',()=>{
+  let s=scenario(['story_wall']);s.board[sq('d4')]={c:'w',t:'n'};s.board[sq('d8')]={c:'b',t:'r'};s=cast(s,'story_wall','d4');
+  assert.deepEqual(effectTags(s,sq('d4')),['방벽']);assert.ok(!legalMoves(s).some(m=>m.from===sq('d8')&&m.to===sq('d4')));
+  s=play(s,'e8','f8');assert.deepEqual(effectTags(s,sq('d4')),[]);s=play(s,'e1','f1');assert.ok(legalMoves(s).some(m=>m.from===sq('d8')&&m.to===sq('d4')));
+  const ep=scenario();ep.turn='b';ep.ply=1;ep.board[sq('d4')]={c:'b',t:'p'};ep.board[sq('e4')]={c:'w',t:'p',shieldUntil:2};ep.ep=sq('e3');assert.ok(!legalMoves(ep).some(m=>m.ep));
+});
+
+test('binding blocks enemy movement and rook castling participation but preserves attacks',()=>{
+  let s=scenario(['binding_chain']);s.board[sq('a8')]={c:'b',t:'r'};s=cast(s,'binding_chain','a8');
+  assert.deepEqual(effectTags(s,sq('a8')),['봉인']);assert.ok(!legalMoves(s).some(m=>m.from===sq('a8')));assert.ok(pseudo(s,sq('a8'),true).some(m=>m.to===sq('a1')));
+  s=play(s,'e8','f8');assert.deepEqual(effectTags(s,sq('a8')),[]);s=play(s,'e1','f1');assert.ok(legalMoves(s).some(m=>m.from===sq('a8')));
+  const t=scenario();t.turn='b';t.castle.b=[true,true];t.board[sq('h8')]={c:'b',t:'r',boundUntil:1};assert.ok(!legalMoves(t).some(m=>m.castle==='king'));t.board[sq('h8')].boundUntil=0;assert.ok(legalMoves(t).some(m=>m.castle==='king'));
+});
+
+test('star support consumes a move and creates a pawn without its first-move privilege',()=>{
+  let s=scenario(['star_support','p_march']);s=cast(s,'star_support','a2');assert.equal(s.board[sq('a2')].moved,true);assert.equal(abilityRemaining(s,'w','star_support'),0);
+  s=play(s,'e8','f8');assert.ok(legalMoves(s).some(m=>m.from===sq('a2')&&m.to===sq('a3')));assert.ok(!legalMoves(s).some(m=>m.from===sq('a2')&&[sq('a4'),sq('a5')].includes(m.to)));assert.equal(reduce(s,{type:'ability',id:'star_support',to:sq('b2'),rev:s.rev},'w'),null);
+});
+
+test('rewind moves the original piece back without undoing captures, rights or promotion',()=>{
+  let s=scenario(['return_echo']);s.castle.w=[true,false];s.board[sq('h1')]={c:'w',t:'r'};s.board[sq('h4')]={c:'b',t:'n'};s=play(s,'h1','h4');s=play(s,'e8','f8');s=cast(s,'return_echo','h1');
+  assert.equal(s.board[sq('h1')].t,'r');assert.equal(s.board[sq('h4')],null);assert.equal(s.board[sq('h1')].moved,true);assert.equal(s.castle.w[0],false);assert.deepEqual(s.graveyard.b,[{c:'b',t:'n'}]);
+  let t=scenario(['return_echo']);t.board[sq('a7')]={c:'w',t:'p'};t=play(t,'a7','a8');t=play(t,'e8','f7');assert.ok(!legalAbilities(t).some(a=>a.id==='return_echo'));
+});
+
+test('rewind rejects an occupied origin, a removed original piece and a bound piece',()=>{
+  let s=scenario(['return_echo']);s.board[sq('a1')]={c:'w',t:'r'};s=play(s,'a1','a3');s=play(s,'e8','f8');
+  s.board[sq('a1')]={c:'w',t:'p'};assert.ok(!legalAbilities(s).some(a=>a.id==='return_echo'));s.board[sq('a1')]=null;
+  const original=s.board[sq('a3')];s.board[sq('a3')]={c:'w',t:'r'};assert.ok(!legalAbilities(s).some(a=>a.id==='return_echo'));s.board[sq('a3')]={...original,boundUntil:s.ply+1};assert.ok(!legalAbilities(s).some(a=>a.id==='return_echo'));
+});
+
+test('record echo permanently copies newest enemy passive, never an active or duplicate',()=>{
+  let s=scenario(['record_echo']);s.board[sq('d4')]={c:'w',t:'n'};s.aug.b=['r_edge','n_stride','story_wall'];s.uses.b.story_wall=2;
+  s=cast(s,'record_echo');assert.deepEqual(s.echoes.w,['n_stride']);assert.ok(pseudo(s,sq('d4')).some(m=>m.to===sq('e4')));assert.equal(s.aug.w.length,1);assert.equal(s.log.at(-1).kind,'ability');
+  const t=scenario(['record_echo','n_stride']);t.aug.b=['n_stride'];assert.ok(!legalAbilities(t).some(a=>a.id==='record_echo'));t.aug.b=['story_wall'];assert.ok(!legalAbilities(t).some(a=>a.id==='record_echo'));
+});
+
+test('grave call revives latest eligible piece, strips effects and never restores castling rights',()=>{
+  let s=scenario(['grave_call']);s.castle.w=[false,false];s.graveyard.w=[{c:'w',t:'n'},{c:'w',t:'r',counter:true},{c:'w',t:'q'}];s=cast(s,'grave_call','h1');
+  assert.deepEqual(s.board[sq('h1')],{c:'w',t:'r',moved:true});assert.deepEqual(s.graveyard.w.map(p=>p.t),['n','q']);assert.equal(s.castle.w[0],false);
+  const t=scenario(['grave_call']);t.graveyard.w=[{c:'w',t:'q'},{c:'w',t:'k'}];assert.equal(legalAbilities(t).length,0);
+});
+
+test('tribute chooses a deterministic nearby pawn, upgrades rook and cannot expose king',()=>{
+  let s=scenario(['tribute_crown']);s.castle.w=[true,false];s.board[sq('h1')]={c:'w',t:'r'};s.board[sq('g2')]={c:'w',t:'p'};s.board[sq('h3')]={c:'w',t:'p'};s=cast(s,'tribute_crown','h1');
+  assert.equal(s.board[sq('h1')].t,'q');assert.equal(s.board[sq('h3')],null);assert.ok(s.board[sq('g2')]);assert.equal(s.castle.w[0],false);assert.deepEqual(s.graveyard.w,[{c:'w',t:'p'}]);
+  const t=scenario(['tribute_crown']);t.board[sq('h1')]={c:'w',t:'r'};t.board[sq('e2')]={c:'w',t:'p'};t.board[sq('e7')]={c:'b',t:'r'};assert.ok(!legalAbilities(t).some(a=>a.id==='tribute_crown'));
+  t.board[sq('e7')]=null;t.board[sq('h1')].boundUntil=1;assert.ok(!legalAbilities(t).some(a=>a.id==='tribute_crown'));
+});
+
+test('counter sigil captures both non-kings, records graves, and survives ordinary movement',()=>{
+  let s=scenario(['counter_sigil']);s.board[sq('d4')]={c:'w',t:'n'};s.board[sq('d8')]={c:'b',t:'r'};s=cast(s,'counter_sigil','d4');s=play(s,'d8','d4');
+  assert.equal(s.board[sq('d4')],null);assert.equal(s.board[sq('d8')],null);assert.deepEqual(s.graveyard.w,[{c:'w',t:'n'}]);assert.deepEqual(s.graveyard.b,[{c:'b',t:'r'}]);assert.match(s.log.at(-1).text,/반격/);
+  let t=scenario(['counter_sigil']);t.board[sq('d4')]={c:'w',t:'n'};t=cast(t,'counter_sigil','d4');t=play(t,'e8','f8');t=play(t,'d4','f5');assert.deepEqual(effectTags(t,sq('f5')),['반격']);
+});
+
+test('counter leaves kings alive, applies to en passant and cannot be used to abandon own king',()=>{
+  let s=scenario([], 'b');s.board[sq('e7')]={c:'w',t:'n',counter:true};s=play(s,'e8','e7');assert.equal(s.board[sq('e7')].t,'k');
+  let ep=scenario([], 'b');ep.board[sq('d4')]={c:'b',t:'p'};ep.board[sq('e4')]={c:'w',t:'p',counter:true};ep.ep=sq('e3');ep=play(ep,'d4','e3');assert.equal(ep.board[sq('e3')],null);assert.equal(ep.board[sq('e4')],null);
+  const pinned=scenario([], 'b');pinned.board[sq('a8')]={c:'w',t:'r'};pinned.board[sq('c8')]={c:'b',t:'r'};pinned.board[sq('c4')]={c:'w',t:'n',counter:true};assert.ok(!legalMoves(pinned).some(m=>m.from===sq('c8')&&m.to===sq('c4')));
+});
+
+test('abilities can escape a position with no ordinary moves, and AI uses the escape',()=>{
+  let s=scenario(['star_support']);s.board[sq('e1')]=null;s.board[sq('e8')]=null;s.board[sq('a1')]={c:'w',t:'k'};s.board[sq('c3')]={c:'b',t:'k'};s.board[sq('a3')]={c:'b',t:'r'};s.board[sq('b3')]={c:'b',t:'q'};
+  assert.ok(inCheck(s,'w'));assert.equal(legalMoves(s).length,0);assert.ok(legalAbilities(s).some(a=>a.id==='star_support'&&a.to===sq('a2')));
+  const ai=aiAction(s);assert.equal(ai.type,'ability');assert.equal(ai.id,'star_support');assert.equal(ai.to,sq('a2'));
+  s.phase='draft';s.draftTurn='b';s.offers.b=['p_retreat'];s=reduce(s,{type:'choose',id:'p_retreat',rev:s.rev},'b');assert.equal(s.result,null);assert.equal(s.phase,'play');
+});
+
+test('active turns trigger the round draft and reset en passant without mutating input',()=>{
+  let s=scenario(['star_support'],'b');s.ply=11;s.ep=sq('a3');const snapshot=structuredClone(s);const moves=legalMoves(s),abilities=legalAbilities(s);assert.ok(moves.length);assert.ok(abilities.length);assert.deepEqual(s,snapshot);
+  s=cast(s,'star_support','a7');assert.equal(s.ply,12);assert.equal(s.phase,'draft');assert.equal(s.ep,null);assert.equal(s.offers.w.length,3);assert.equal(s.rev,snapshot.rev+1);
+});
+
+test('mixed ability and move command streams survive JSON network roundtrips deterministically',()=>{
+  let host=scenario(['star_support','counter_sigil','return_echo']);host.board[sq('a1')]={c:'w',t:'r'};let guest=JSON.parse(JSON.stringify(host));
+  for(const base of [{type:'ability',id:'star_support',to:sq('a2')},{type:'move',from:sq('e8'),to:sq('f8')},{type:'ability',id:'counter_sigil',to:sq('a2')},{type:'move',from:sq('f8'),to:sq('e8')},{type:'move',from:sq('a1'),to:sq('b1')},{type:'move',from:sq('e8'),to:sq('f8')},{type:'ability',id:'return_echo',to:sq('a1')}]){
+    const action={...base,rev:host.rev},color=host.turn;host=reduce(host,action,color);guest=reduce(guest,JSON.parse(JSON.stringify(action)),color);assert.ok(host);assert.deepEqual(host,guest);guest=JSON.parse(JSON.stringify(guest));
+  }
+});
 
