@@ -16,7 +16,7 @@ h1 { font-size: 23px; margin: 0; letter-spacing: -1px; line-height: 1.3; }
 .arena { min-height: 0; min-width: 0; height: 100%; display: grid; grid-template-columns: clamp(172px,19vw,240px) minmax(0,1fr) clamp(172px,19vw,240px); gap: 12px; align-items: stretch; }
 .left-panel, .right-panel, .board-section { min-height: 0; min-width: 0; }
 .left-panel { display: flex; flex-direction: column; gap: 10px; }
-.right-panel { grid-column: auto; display: grid; grid-template-rows: auto auto minmax(0,1fr); gap: 10px; }
+.right-panel { grid-column: auto; display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto minmax(0,1fr); gap: 10px; }
 .panel { padding: 13px; margin: 0; border-radius: 8px; min-width: 0; }
 .section-label { font-size: 8px; letter-spacing: .8px; }
 .section-label > span:not(.live-dot) { font-size: 8px; }
