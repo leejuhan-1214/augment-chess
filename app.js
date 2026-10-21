@@ -1,5 +1,5 @@
 import {CARDS,NAMES,OTHER,position,createGame,reduce,legalMoves,inCheck,aiAction,squareName,legalAbilities,abilityRemaining,effectTags} from './engine.js?v=2.0.0';
-import {OnlineRoom,roomCode} from './network.js?v=2.0.0';
+import {OnlineRoom,roomCode} from './network.js?v=2.0.2';
 import {castleStatus,castleFromRook} from './ui-rules.js?v=2.0.0';
 const $=id=>document.getElementById(id),side=c=>c==='w'?'백':'흑';
 const SYMBOLS={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
@@ -123,7 +123,7 @@ $('new-game').onclick=()=>{if(!game&&!room){toast('대전 모드를 선택해 �
 $('leave-room').onclick=()=>showConfirm('방을 나갈까요?','상대와 연결이 끊기며 이 기기의 대전 기록이 사라집니다.',reset);
 $('reconnect').onclick=()=>{if(!room){const code=$('room-code').textContent;startOnline(myColor==='w',code);return;}networkMessage='다시 연결하고 있습니다.';room.reconnect();render();};
 async function copy(text){try{await navigator.clipboard.writeText(text);toast('복사했습니다. 친구에게 보내주세요.');}catch{$('info-title').textContent='초대 정보';$('info-content').textContent=text;$('info-dialog').showModal();}}
-$('copy-link').onclick=()=>copy(new URL('./',location.href).href+'#room='+$('room-code').textContent);$('copy-code').onclick=()=>copy($('room-code').textContent);
+$('copy-link').onclick=()=>{const invite=new URL('./',location.href);invite.searchParams.set('v','2.0.2');invite.hash='room='+$('room-code').textContent;copy(invite.href);};$('copy-code').onclick=()=>copy($('room-code').textContent);
 $('resign').onclick=()=>showConfirm('이번 대전을 기권할까요?','상대의 승리로 대전이 종료됩니다.',()=>commit({type:'resign'},mode==='local'?game.turn:myColor));
 $('draw').onclick=()=>{if(mode==='ai'){toast('AI 대전에서는 기권 또는 새 게임을 이용해 주세요.');return;}if(mode==='local')showConfirm('무승부에 동의하나요?','두 플레이어가 동의하면 대전을 무승부로 끝냅니다.',()=>{commit({type:'draw'},'w');commit({type:'draw'},'b');});else commit({type:'draw'});};
 $('accept-draw').onclick=()=>commit({type:'draw'});$('decline-draw').onclick=()=>commit({type:'decline'});

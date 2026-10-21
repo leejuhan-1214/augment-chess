@@ -39,9 +39,15 @@ body[data-playing="true"] #leave-room { display:inline-block; font-size:8px; mar
 @media(max-height:620px) and (min-width:761px) {
   #castle-controls { margin-bottom:7px; padding-bottom:7px; }
   .castle-buttons { margin-top:5px; }
-  #skill-hint { font-size:8px; margin-top:6px; }
+  #skill-hint { display:none; }
 }
 @media(max-width:760px) {
+  body[data-playing="true"] .board-wrap,
+  body[data-playing="true"] .player-strip,
+  body[data-playing="true"] .board-toolbar { width:min(100%,calc(100dvh - 430px)); }
+  body[data-playing="true"]:not([data-mode="online"]) .board-wrap,
+  body[data-playing="true"]:not([data-mode="online"]) .player-strip,
+  body[data-playing="true"]:not([data-mode="online"]) .board-toolbar { width:min(100%,calc(100dvh - 350px)); }
   .active-card { padding:4px; margin-top:4px; }
   .active-card small { display:block; font-size:7px; margin-top:1px; }
   .active-card > span { width:19px; height:20px; font-size:18px; }
