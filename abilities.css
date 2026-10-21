@@ -35,6 +35,12 @@ body[data-playing="true"] #leave-room { display:inline-block; font-size:8px; mar
 .special-info { border-left:2px solid #706246; padding-left:12px; }
 .try-card { color:var(--green); font-size:10px; margin:1px 0 8px; }
 .inspiration-note { font-size:10px!important; color:var(--muted); border-top:1px solid var(--border); padding-top:14px; }
+.catalog-tools {display:flex;gap:7px;position:sticky;top:-1px;background:var(--panel,#172426);padding:12px 0;z-index:2;flex-wrap:wrap}
+.catalog-tools input,.catalog-tools select {background:#101b1e;color:#e0e6d7;border:1px solid #425654;border-radius:6px;padding:9px;font:inherit;font-size:12px;min-width:0}
+.catalog-tools input {flex:1;min-width:150px}.catalog-tools select{max-width:155px}
+#catalog-count {font-size:10px;color:var(--muted)}#catalog-results .info-card{padding:12px;border-bottom:1px solid var(--border);margin:0}#catalog-results small{font-size:9px}
+.picked-target {box-shadow:inset 0 0 0 3px #e2c582!important}.terrain{position:absolute;right:3px;top:2px;font-size:7px;color:#f6e3b9;text-shadow:0 1px 2px #000;pointer-events:none}.hidden-unit{font-size:32px;color:#bdcbaa}
+#finish-skill{min-height:28px;font-size:10px;padding:6px;margin-top:5px}#piece-powers{display:flex;flex-wrap:wrap;gap:4px}#piece-powers button{font-size:9px}.choice-button{margin:4px;min-height:35px}
 .draft-card:has(.card-top) p { font-size:10px; line-height:1.65; }
 @media(max-height:620px) and (min-width:761px) {
   #castle-controls { margin-bottom:7px; padding-bottom:7px; }
