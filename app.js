@@ -1,9 +1,22 @@
 import {CARDS,NAMES,OTHER,position,createGame,reduce,legalMoves,inCheck,aiAction,squareName,legalAbilities,abilityRemaining,effectTags} from './engine.js?v=2.0.0';
-import {OnlineRoom,roomCode} from './network.js?v=2.0.2';
+import {OnlineRoom,roomCode} from './network.js?v=2.1.0';
+import {createSessionStore,snapshotDecision} from './online-session.js?v=2.1.0';
 import {castleStatus,castleFromRook} from './ui-rules.js?v=2.0.0';
 const $=id=>document.getElementById(id),side=c=>c==='w'?'백':'흑';
 const SYMBOLS={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 let game=null,mode='lobby',myColor='w',orientation='w',selected=null,targets=[],activeSkill=null,room=null,aiTimer=null,toastTimer=null,pendingTimer=null,confirmAction=null,soundOn=false,audio=null,networkMessage='',busy=false,aiLevel='normal',pendingMove=false;
+let synced=false,sequence=0,pendingActionId=null;
+function browserStorage(name){try{return window[name];}catch{return null;}}
+const sessions=createSessionStore({local:browserStorage('localStorage'),session:browserStorage('sessionStorage')});
+const onlineReady=()=>!!room?.live&&(room.host||synced);
+function saveOnline(){if(mode==='online'&&room)sessions.save({code:room.code,host:room.host,token:room.token,guestToken:room.guestToken,sequence,game});}
+function sendState(ack=null,rejected=false){return room?.send({type:'state',game,sequence,ack,rejected});}
+function waitForState(requestId=null){clearTimeout(pendingTimer);pendingTimer=setTimeout(()=>{
+  if(mode!=='online'||!room||room.host)return;
+  synced=false;networkMessage='응답이 늦어 대전 정보를 다시 요청합니다.';
+  if(!room.send({type:'sync',requestId})){pendingMove=false;pendingActionId=null;networkMessage='전송이 중단됐습니다. 연결을 복구하고 있습니다.';render();return;}
+  render();pendingTimer=setTimeout(()=>{networkMessage='대전 정보를 받지 못했습니다. 다시 연결하기를 눌러 주세요.';render();},10000);
+},5000);}
 // Original vector silhouettes keep pieces crisp on phones and high density screens.
 const PATHS={
   p:'M23 9a7 7 0 1 1 0 14a7 7 0 1 1 0-14ZM21 23c-3 4-2 9-6 14h16c-4-5-3-10-6-14ZM13 38h20v5H13Z',
@@ -17,7 +30,7 @@ function pieceSVG(p){const fill=p.c==='w'?'#f4f0da':'#253b3c',stroke=p.c==='w'?'
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
 function beep(capture=false){if(!soundOn)return;try{audio??=new (window.AudioContext||window.webkitAudioContext)();audio.resume();const osc=audio.createOscillator(),gain=audio.createGain();osc.connect(gain);gain.connect(audio.destination);osc.type='sine';osc.frequency.setValueAtTime(capture?330:510,audio.currentTime);osc.frequency.exponentialRampToValueAtTime(180,audio.currentTime+.09);gain.gain.setValueAtTime(.06,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.13);osc.start();osc.stop(audio.currentTime+.14);}catch{}}
 function colorNow(){return game?.phase==='draft'?game.draftTurn:game?.turn;}
-function canAct(color=colorNow()){return game&&!game.result&&(!['online'].includes(mode)||room?.live)&&((mode==='local')||color===myColor)&&!busy&&!pendingMove;}
+function canAct(color=colorNow()){return game&&!game.result&&(mode!=='online'||onlineReady())&&((mode==='local')||color===myColor)&&!busy&&!pendingMove;}
 function closeDraft(){if($('draft-dialog').open)$('draft-dialog').close();}
 function renderBoard(){const s=game||position(),checkColor=game&&inCheck(s,s.turn)?s.turn:null,frag=document.createDocumentFragment();
   const skills=activeSkill&&game?legalAbilities(game).filter(a=>a.id===activeSkill):[];
@@ -58,13 +71,13 @@ function renderPlayers(){const bottom=orientation,top=OTHER(bottom);for(const [w
 }}
 function render(){if(activeSkill&&!canAct())activeSkill=null;document.body.dataset.mode=mode;document.body.dataset.playing=String(!!game);renderBoard();renderPlayers();renderAugments();renderHistory();$('mode-badge').textContent=({lobby:'LOBBY',ai:'VS AI',local:'LOCAL',online:'ONLINE'})[mode];$('round-count').textContent=game?'ROUND '+String(Math.floor(game.ply/2)+1).padStart(2,'0'):'ROUND —';
   document.querySelectorAll('.timeline-item').forEach((el,i)=>el.classList.toggle('active',!!game&&(game.aug.w.length>i||game.aug.b.length>i)));
-  $('lobby').hidden=mode==='online'||!!game;$('room-panel').hidden=mode!=='online';$('game-actions').hidden=!game||!!game.result||(mode==='online'&&!room?.live);$('draw-answer').hidden=!game?.drawOffer||game.drawOffer===myColor||mode==='local';$('draw').disabled=!!game?.drawOffer; $('rematch').hidden=!game?.result;$('rematch-status').hidden=!game?.result||mode!=='online'||!game?.rematch.length;
-  if(game?.result){$('status-icon').textContent=game.result.winner?'♛':'½';$('status-title').textContent=game.result.winner?(mode==='local'?side(game.result.winner)+' 승리!':game.result.winner===myColor?'멋진 승리입니다.':'다음 수를 준비해요.'):'무승부';$('status-desc').textContent=game.result.reason;$('rematch-status').textContent=game.rematch.includes(myColor)?'친구의 재대결 수락을 기다립니다.':'친구가 재대결을 신청했습니다.';$('rematch').disabled=mode==='online'&&(!room?.live||game.rematch.includes(myColor));}
-  else if(mode==='online'&&!room?.live){$('status-icon').textContent='↔';$('status-title').textContent=game?'연결이 잠시 멈췄어요.':'친구를 초대하세요.';$('status-desc').textContent=game?'다시 연결하면 이 포지션에서 계속합니다.':'방 코드나 초대 링크를 공유하면 대전이 시작됩니다.';}
+  $('lobby').hidden=mode==='online'||!!game;$('room-panel').hidden=mode!=='online';$('game-actions').hidden=!game||!!game.result||(mode==='online'&&!onlineReady());$('draw-answer').hidden=!game?.drawOffer||game.drawOffer===myColor||mode==='local';$('draw').disabled=!!game?.drawOffer; $('rematch').hidden=!game?.result;$('rematch-status').hidden=!game?.result||mode!=='online'||!game?.rematch.length;
+  if(game?.result){$('status-icon').textContent=game.result.winner?'♛':'½';$('status-title').textContent=game.result.winner?(mode==='local'?side(game.result.winner)+' 승리!':game.result.winner===myColor?'멋진 승리입니다.':'다음 수를 준비해요.'):'무승부';$('status-desc').textContent=game.result.reason;$('rematch-status').textContent=game.rematch.includes(myColor)?'친구의 재대결 수락을 기다립니다.':'친구가 재대결을 신청했습니다.';$('rematch').disabled=mode==='online'&&(!onlineReady()||game.rematch.includes(myColor));}
+  else if(mode==='online'&&!onlineReady()){$('status-icon').textContent='↔';$('status-title').textContent=room?.live?'대전 정보를 동기화 중':game?'대전을 다시 연결합니다.':myColor==='w'?'친구를 초대하세요.':'친구의 방에 연결 중';$('status-desc').textContent=game?'현재 판을 보관했습니다. 연결되면 이어집니다.':myColor==='w'?'방 코드나 초대 링크를 공유하면 대전이 시작됩니다.':'방장이 같은 코드의 방을 열어 두어야 합니다.';}
   else if(game){$('status-icon').textContent=game.phase==='draft'?'✦':inCheck(game,game.turn)?'!':SYMBOLS[game.turn].k;$('status-title').textContent=game.phase==='draft'?(canAct(game.draftTurn)?'증강을 선택하세요.':side(game.draftTurn)+'의 증강 선택 중'):inCheck(game,game.turn)?side(game.turn)+' 킹이 체크입니다.':side(game.turn)+'의 차례입니다.';$('status-desc').textContent=game.phase==='draft'?'세 가지 가능성 중 하나가 새로운 전략이 됩니다.':mode==='ai'&&game.turn==='b'?'AI가 다음 수를 생각하고 있습니다.':canAct()?'기물을 선택하면 이동할 수 있는 칸이 표시됩니다.':'상대의 한 수를 기다려 주세요.';}
   else{$('status-icon').textContent='✦';$('status-title').textContent='전략에 변수를 더하다.';$('status-desc').textContent='기물의 능력을 바꾸는 증강을 골라 나만의 플레이를 만들어보세요.';}
-  $('board-note').innerHTML='<i></i>';const note=document.createTextNode(!game?'READY WHEN YOU ARE':game.result?'MATCH COMPLETE':mode==='online'&&!room?.live?'CONNECTION PAUSED':game.phase==='draft'?'CHOOSE YOUR AUGMENT':side(game.turn)+'의 차례 · '+(mode==='online'?'ONLINE MATCH':'AUGMENT CHESS'));$('board-note').append(note);
-  if(mode==='online'){$('room-heading').textContent=room?.live?'친구와 대전 중':game?'다시 연결을 기다리는 중':'친구를 기다리는 중';$('connection-status').textContent=networkMessage;$('connection-dot').style.background=room?.live?'#a6bf94':'#d6ba80';$('reconnect').hidden=!!room?.live||!room;}
+  $('board-note').innerHTML='<i></i>';const note=document.createTextNode(!game?'READY WHEN YOU ARE':game.result?'MATCH COMPLETE':mode==='online'&&!onlineReady()?'CONNECTION PAUSED':game.phase==='draft'?'CHOOSE YOUR AUGMENT':side(game.turn)+'의 차례 · '+(mode==='online'?'ONLINE MATCH':'AUGMENT CHESS'));$('board-note').append(note);
+  if(mode==='online'){$('room-heading').textContent=onlineReady()?'친구와 대전 중':game?'다시 연결을 기다리는 중':myColor==='w'?'친구를 기다리는 중':'친구의 방에 연결 중';$('connection-status').textContent=networkMessage;$('connection-dot').style.background=onlineReady()?'#a6bf94':'#d6ba80';$('reconnect').hidden=onlineReady();}
   if(activeSkill){const card=CARDS.find(c=>c.id===activeSkill);$('status-title').textContent=card.name;$('status-desc').textContent=card.target;$('board-note').textContent='✦ 대상 선택 · 이동 대신 발동';}
   renderCastling();renderDraft();scheduleAI();
 }
@@ -74,25 +87,41 @@ function chooseSkill(id){if(!game||game.phase!=='play'||!canAct()){toast('내 �
 function scheduleAI(){clearTimeout(aiTimer);if(mode!=='ai'||!game||game.result||colorNow()!=='b')return;const rev=game.rev;aiTimer=setTimeout(()=>{if(mode!=='ai'||!game||game.rev!==rev)return;if(game.phase==='draft'){
     const ranked=['tribute_crown','grave_call','q_leap','counter_sigil','record_echo','n_stride','b_guard','star_support','r_edge','story_wall','binding_chain','k_stride','return_echo','p_fang','p_march','p_retreat'];const id=[...game.offers.b].sort((a,b)=>ranked.indexOf(a)-ranked.indexOf(b))[0];commit({type:'choose',id},'b');
   }else{const action=aiAction(game,aiLevel);if(action)commit(action,'b');}},game.phase==='draft'?900:550);}
-function commit(action,color=myColor){if(!game||!action)return;action={rev:game.rev,...action};if(mode==='online'&&!room?.live){toast('상대와 다시 연결한 뒤 계속할 수 있습니다.');return;}
-  if(mode==='online'&&!room.host){if(pendingMove)return;pendingMove=true;room.send({type:'action',action});selected=null;targets=[];activeSkill=null;render();clearTimeout(pendingTimer);pendingTimer=setTimeout(()=>{if(pendingMove){pendingMove=false;room?.send({type:'sync'});toast('동기화를 다시 요청했습니다.');render();}},4000);return;}
-  const next=reduce(game,action,color);if(!next){toast('지금은 사용할 수 없는 행동입니다.');return;}const wasMove=action.type==='move'||action.type==='ability';game=next;selected=null;targets=[];activeSkill=null;if(wasMove)beep();if(mode==='online'){if(game.rematch.length===2){game=createGame(crypto.getRandomValues(new Uint32Array(1))[0]);toast('새 대전이 시작됐습니다.');}room.send({type:'state',game});}render();
+function commit(action,color=myColor,ack=null){if(!game||!action)return false;action={rev:game.rev,...action};if(mode==='online'&&!onlineReady()){toast('상대와 다시 연결한 뒤 계속할 수 있습니다.');return false;}
+  if(mode==='online'&&!room.host){if(pendingMove)return false;const requestId=crypto.randomUUID();pendingMove=true;pendingActionId=requestId;
+    if(!room.send({type:'action',action,requestId})){pendingMove=false;pendingActionId=null;synced=false;networkMessage='행동을 전송하지 못했습니다. 다시 연결한 뒤 계속해 주세요.';render();return false;}
+    selected=null;targets=[];activeSkill=null;render();waitForState(requestId);return true;}
+  const next=reduce(game,action,color);if(!next){if(!ack)toast('지금은 사용할 수 없는 행동입니다.');return false;}const wasMove=action.type==='move'||action.type==='ability';game=next;selected=null;targets=[];activeSkill=null;if(wasMove)beep();if(mode==='online'){sequence++;if(game.rematch.length===2){game=createGame(crypto.getRandomValues(new Uint32Array(1))[0]);toast('새 대전이 시작됐습니다.');}saveOnline();sendState(ack);}render();return true;
 }
-function acceptState(next){if(!next||!Array.isArray(next.board)||next.board.length!==64||!Number.isInteger(next.rev)||!['draft','play','over'].includes(next.phase))return;const moved=game&&next.ply!==game.ply;game=next;clearTimeout(pendingTimer);pendingMove=false;selected=null;targets=[];activeSkill=null;if(moved)beep();render();}
+function acceptState(next,message){const decision=snapshotDecision(game,next,sequence,message.sequence);if(decision==='ignore')return;
+  const acknowledged=pendingActionId&&message.ack===pendingActionId;
+  const legacyAck=message.sequence===undefined&&pendingMove;
+  const wasWaiting=!synced||acknowledged||legacyAck;
+  if(acknowledged||legacyAck){pendingMove=false;pendingActionId=null;}
+  synced=true;if(!pendingMove)clearTimeout(pendingTimer);
+  networkMessage=pendingMove?'상대에게 행동 확인을 기다리는 중입니다.':'연결 완료 · 대전이 동기화됐습니다.';
+  if(decision==='duplicate'){if(wasWaiting)render();if(acknowledged&&message.rejected)toast('상태가 바뀌어 행동을 적용하지 못했습니다. 다시 선택해 주세요.');return;}
+  const moved=game&&next.ply!==game.ply;game=next;sequence=Number.isSafeInteger(message.sequence)?message.sequence:next.rev;
+  selected=null;targets=[];activeSkill=null;saveOnline();if(moved)beep();render();if(acknowledged&&message.rejected)toast('상태가 바뀌어 행동을 적용하지 못했습니다. 다시 선택해 주세요.');
+}
 function showConfirm(title,desc,fn){closeDraft();$('confirm-title').textContent=title;$('confirm-desc').textContent=desc;confirmAction=fn;$('confirm-dialog').showModal();}
-function disconnect(){room?.destroy();room=null;clearTimeout(pendingTimer);pendingMove=false;networkMessage='';clearTimeout(aiTimer);}
+function disconnect(){room?.destroy();room=null;clearTimeout(pendingTimer);pendingMove=false;pendingActionId=null;synced=false;sequence=0;networkMessage='';clearTimeout(aiTimer);sessions.clear();}
 function reset(){disconnect();game=null;mode='lobby';selected=null;targets=[];activeSkill=null;orientation='w';myColor='w';closeDraft();const url=new URL(location.href);url.hash='';history.replaceState(null,'',url);render();}
 function practice(nextMode,tryCard){disconnect();mode=nextMode;myColor='w';orientation='w';game=createGame(crypto.getRandomValues(new Uint32Array(1))[0]);selected=null;targets=[];activeSkill=null;if(tryCard&&CARDS.some(c=>c.id===tryCard)){game.offers.w=[tryCard];game=reduce(game,{type:'choose',id:tryCard,rev:game.rev},'w');}render();}
-function startOnline(host,code){disconnect();mode='online';game=null;myColor=host?'w':'b';orientation=myColor;selected=null;targets=[];activeSkill=null;networkMessage='온라인 연결 서버에 접속하고 있습니다.';$('room-code').textContent=code;
+function startOnline(host,code,restored=null){disconnect();mode='online';game=restored?.game||null;sequence=restored?.sequence||0;myColor=host?'w':'b';orientation=myColor;selected=null;targets=[];activeSkill=null;networkMessage=restored?'이전 대전을 복원하고 다시 연결합니다.':'온라인 연결 서버에 접속하고 있습니다.';$('room-code').textContent=code;
   const url=new URL(location.href);url.hash='room='+code;history.replaceState(null,'',url);render();
-  let token;try{token=sessionStorage.getItem('ac-token-'+code)||crypto.randomUUID();sessionStorage.setItem('ac-token-'+code,token);}catch{token=crypto.randomUUID();}
-  try{room=new OnlineRoom({host,code,token});}catch(e){networkMessage=e.message;toast(networkMessage);render();return;}
-  room.on('ready',()=>{networkMessage=host?'방이 열렸습니다. 초대 링크를 친구에게 보내주세요.':'방장에게 연결하고 있습니다.';render();})
-    .on('connected',()=>{networkMessage='연결 완료 · 모든 이동이 실시간으로 동기화됩니다.';pendingMove=false;if(host){if(!game)game=createGame(crypto.getRandomValues(new Uint32Array(1))[0]);room.send({type:'state',game});}else room.send({type:'sync'});render();toast('친구와 연결됐습니다.');})
-    .on('data',data=>{if(data.type==='action'&&host){commit(data.action,'b');room.send({type:'state',game});}else if(data.type==='sync'&&host)room.send({type:'state',game});else if(data.type==='state'&&!host)acceptState(data.game);})
-    .on('disconnected',()=>{pendingMove=false;networkMessage='상대와 연결이 끊겼습니다. 같은 방 코드로 다시 연결하면 이어집니다.';render();toast('연결이 끊겨 대전을 일시 정지했습니다.');})
+  const token=restored?.token||sessions.token(code);
+  try{room=new OnlineRoom({host,code,token,guestToken:restored?.guestToken||null});}catch(e){networkMessage=e.message;toast(networkMessage);render();return;}
+  saveOnline();
+  room.on('ready',()=>{networkMessage=onlineReady()?'연결 완료 · 대전이 동기화됐습니다.':host?'방이 열렸습니다. 초대 링크를 친구에게 보내주세요.':'방장에게 연결하고 있습니다.';render();})
+    .on('connected',()=>{networkMessage=host?'연결 완료 · 대전이 동기화됐습니다.':'친구와 연결됐습니다. 대전 정보를 받고 있습니다.';pendingMove=false;pendingActionId=null;synced=host;if(host){if(!game){game=createGame(crypto.getRandomValues(new Uint32Array(1))[0]);sequence++;}saveOnline();sendState();}else if(room.send({type:'sync'}))waitForState();render();})
+    .on('data',data=>{const requestId=typeof data.requestId==='string'&&data.requestId.length<=80?data.requestId:null;
+      if(data.type==='action'&&host){if(!Number.isInteger(data.action?.rev)||!commit(data.action,'b',requestId))sendState(requestId,true);}
+      else if(data.type==='sync'&&host)sendState(requestId);else if(data.type==='state'&&!host)acceptState(data.game,data);})
+    .on('disconnected',()=>{clearTimeout(pendingTimer);pendingMove=false;pendingActionId=null;synced=false;networkMessage='연결이 끊겨 자동으로 복구하고 있습니다. 현재 판은 보관됩니다.';saveOnline();render();})
+    .on('reconnecting',message=>{networkMessage=message;render();})
     .on('signaling',()=>{networkMessage=room.live?'대전 연결 유지 중 · 중계 서버에 재접속합니다.':'중계 서버에 다시 연결하고 있습니다.';render();})
-    .on('error',message=>{pendingMove=false;networkMessage=message;render();toast(message);});
+    .on('error',message=>{if(!room.live){clearTimeout(pendingTimer);pendingMove=false;pendingActionId=null;synced=false;}networkMessage=message;render();toast(message);});
 }
 function onSquare(i){if(!game||game.phase!=='play'||!canAct())return;if(activeSkill){const action=legalAbilities(game).find(a=>a.id===activeSkill&&a.to===i);if(action)commit(action,mode==='local'?game.turn:myColor);else toast('빛나는 칸을 선택하거나 스킬 선택을 취소해 주세요.');return;}const p=game.board[i],m=targets.find(x=>x.to===i)||(selected!==null?castleFromRook(game,selected,i):null);if(m){const moving=game.board[m.from];if(moving.t==='p'&&Math.floor(m.to/8)===(moving.c==='w'?0:7)){showPromotion(m);return;}commit({type:'move',from:m.from,to:m.to},mode==='local'?game.turn:myColor);return;}
   if(p?.c===game.turn){selected=selected===i?null:i;targets=selected===null?[]:legalMoves(game).filter(m=>m.from===i);renderBoard();}else{selected=null;targets=[];renderBoard();}
@@ -104,7 +133,7 @@ function guide(){closeDraft();$('info-title').textContent='체스에, 가능성�
   <h3>03 / 발동형 특수능력</h3><p>지속형은 상시 적용됩니다. 발동형은 내 차례에 왼쪽 카드를 누른 뒤 빛나는 대상을 선택합니다. 발동은 이동 대신 한 차례를 소모하며 라운드에도 포함됩니다. 카드마다 대전당 1~2회 사용할 수 있습니다. 선택 취소로 일반 이동으로 돌아갑니다.</p><p>방벽은 포획을 막고, 봉인은 이동을 막지만 공격 범위는 유지합니다. 두 효과는 상대 다음 차례 끝에 사라집니다. 반격 각인은 공개되어 있으며 포획될 때까지 유지됩니다. 부활·소환·회귀는 캐슬링이나 폰의 첫 이동 권리를 돌려주지 않습니다. 킹을 체크에 남기는 스킬은 발동할 수 없습니다.</p>
   <h3>04 / 캐슬링</h3><p>킹을 누른 뒤 해당 룩 또는 두 칸 옆의 도착 칸을 누르세요. 오른쪽 O-O(킹사이드), O-O-O(퀸사이드) 버튼으로도 가능합니다. 불가능한 버튼을 누르면 이유를 알려드립니다.</p><p>킹과 해당 룩이 움직인 적이 없어야 하고, 사이가 비어 있어야 합니다. 현재 체크이거나 킹이 지나갈 칸·도착 칸이 공격받으면 불가능합니다. 증강 공격 범위도 포함하며 봉인된 룩은 참여할 수 없습니다.</p>
   <h3>05 / 기본 체스와 연습</h3><p>체크메이트, 스테일메이트, 앙파상, 선택 승급, 동일 포지션 3회 반복과 50수 규칙을 지원합니다. 폰의 3칸 전진은 앙파상 대상이 아닙니다. 로비의 모든 증강 살펴보기에서 원하는 카드로 AI 연습을 시작할 수 있습니다.</p>
-  <h3>온라인 이용</h3><p>초대한 친구와 하는 1:1 대전입니다. 두 사람 모두 탭을 유지하세요. 참가자는 다시 연결할 수 있지만 방장 탭을 닫거나 새로고침하면 대전이 사라집니다. 일부 회사·학교·모바일 네트워크에서는 WebRTC 연결이 제한될 수 있습니다. 두 사람 모두 최신 버전으로 접속해 주세요.</p>`;$('info-dialog').showModal();}
+  <h3>온라인 이용</h3><p>초대한 친구와 하는 1:1 대전입니다. 일시적인 끊김은 자동으로 재접속하고, 같은 탭을 새로고침하면 현재 판을 복원합니다. 참가자는 같은 브라우저의 새 탭에서도 같은 코드로 재입장할 수 있습니다. 브라우저 저장 공간이 허용되어야 하며 복원 정보는 24시간 유효합니다. 방 나가기를 누르거나 방장 탭을 닫으면 이어하기를 보장하지 않습니다. 일부 회사·학교·모바일 네트워크에서는 WebRTC 연결이 제한될 수 있습니다. 두 사람 모두 최신 버전으로 접속해 주세요.</p>`;$('info-dialog').showModal();}
 function allCards(){closeDraft();$('info-title').textContent=CARDS.length+'가지 새로운 가능성.';const frag=document.createDocumentFragment();const intro=document.createElement('p');intro.textContent='지속형 8종 + 발동형 8종. 발동형은 내 차례를 소모합니다. 킹을 체크에 남기는 행동은 사용할 수 없습니다.';frag.append(intro);
   for(const active of [true,false]){const heading=document.createElement('h3');heading.className='catalog-heading';heading.textContent=active?'발동형 · 판을 바꾸는 특수능력':'지속형 · 새로운 이동과 공격';frag.append(heading);for(const card of CARDS.filter(c=>!!c.active===active)){const el=document.createElement('article');el.className='info-card'+(active?' special-info':'');el.innerHTML=`<h3>${SYMBOLS.w[card.icon]} ${card.name} <small>· ${card.tier}${active?' · 대전당 '+card.uses+'회':''}</small></h3><p>${card.desc}</p>`;if(mode==='lobby'&&!game){const tryButton=document.createElement('button');tryButton.className='text-button try-card';tryButton.textContent='이 카드로 AI 연습 ↗';tryButton.setAttribute('aria-label',card.name+' 카드로 AI 연습');tryButton.onclick=()=>{$('info-dialog').close();practice('ai',card.id);};el.append(tryButton);}frag.append(el);}}
   const source=document.createElement('p');source.className='inspiration-note';source.textContent='전독시의 독자·이야기·성좌 모티프와 카드 듀얼의 부활·제물·함정에서 착안한 독자적인 체스 능력입니다. 원작의 공식 게임이나 효과 재현은 아닙니다.';frag.append(source);$('info-content').replaceChildren(frag);$('info-dialog').showModal();}
@@ -121,9 +150,9 @@ $('flip').onclick=()=>{orientation=OTHER(orientation);renderBoard();renderPlayer
 $('sound').onclick=()=>{soundOn=!soundOn;$('sound').textContent=soundOn?'♪':'♫';$('sound').setAttribute('aria-label',soundOn?'소리 끄기':'소리 켜기');$('sound').title=soundOn?'소리 끄기':'소리 켜기';toast(soundOn?'이동 소리를 켰습니다.':'이동 소리를 껐습니다.');if(soundOn)beep();};
 $('new-game').onclick=()=>{if(!game&&!room){toast('대전 모드를 선택해 주세요.');return;}showConfirm('로비로 돌아갈까요?','현재 대전이 종료됩니다. 온라인 방을 나가면 상대와 연결이 끊깁니다.',reset);};
 $('leave-room').onclick=()=>showConfirm('방을 나갈까요?','상대와 연결이 끊기며 이 기기의 대전 기록이 사라집니다.',reset);
-$('reconnect').onclick=()=>{if(!room){const code=$('room-code').textContent;startOnline(myColor==='w',code);return;}networkMessage='다시 연결하고 있습니다.';room.reconnect();render();};
+$('reconnect').onclick=()=>{if(!room){const code=$('room-code').textContent;startOnline(myColor==='w',code);return;}clearTimeout(pendingTimer);pendingMove=false;pendingActionId=null;synced=false;networkMessage='다시 연결하고 있습니다.';room.reconnect();render();};
 async function copy(text){try{await navigator.clipboard.writeText(text);toast('복사했습니다. 친구에게 보내주세요.');}catch{$('info-title').textContent='초대 정보';$('info-content').textContent=text;$('info-dialog').showModal();}}
-$('copy-link').onclick=()=>{const invite=new URL('./',location.href);invite.searchParams.set('v','2.0.2');invite.hash='room='+$('room-code').textContent;copy(invite.href);};$('copy-code').onclick=()=>copy($('room-code').textContent);
+$('copy-link').onclick=()=>{const invite=new URL('./',location.href);invite.searchParams.set('v','2.1.0');invite.hash='room='+$('room-code').textContent;copy(invite.href);};$('copy-code').onclick=()=>copy($('room-code').textContent);
 $('resign').onclick=()=>showConfirm('이번 대전을 기권할까요?','상대의 승리로 대전이 종료됩니다.',()=>commit({type:'resign'},mode==='local'?game.turn:myColor));
 $('draw').onclick=()=>{if(mode==='ai'){toast('AI 대전에서는 기권 또는 새 게임을 이용해 주세요.');return;}if(mode==='local')showConfirm('무승부에 동의하나요?','두 플레이어가 동의하면 대전을 무승부로 끝냅니다.',()=>{commit({type:'draw'},'w');commit({type:'draw'},'b');});else commit({type:'draw'});};
 $('accept-draw').onclick=()=>commit({type:'draw'});$('decline-draw').onclick=()=>commit({type:'decline'});
@@ -133,4 +162,10 @@ $('match-details').onclick=()=>{closeDraft();$('info-title').textContent='대전
 $('howto').onclick=guide;$('all-cards').onclick=allCards;$('close-info').onclick=()=>{$('info-dialog').close();renderDraft();};$('info-dialog').addEventListener('cancel',()=>setTimeout(renderDraft,0));
 window.addEventListener('beforeunload',e=>{if(mode==='online'&&room?.live&&!game?.result){e.preventDefault();e.returnValue='';}});
 render();
-const invite=new URLSearchParams(location.hash.slice(1)).get('room');if(invite&&/^[a-z0-9]{8}$/i.test(invite)){$('room-input').value=invite.toUpperCase();toast('초대된 방 코드가 입력됐습니다. 화살표를 눌러 참여하세요.');}
+const invite=new URLSearchParams(location.hash.slice(1)).get('room');
+const restored=invite&&/^[a-z0-9]{8}$/i.test(invite)?sessions.load(invite.toUpperCase()):null;
+if(restored)startOnline(restored.host,restored.code,restored);
+else if(invite&&/^[a-z0-9]{8}$/i.test(invite)){$('room-input').value=invite.toUpperCase();toast('초대된 방 코드가 입력됐습니다. 화살표를 눌러 참여하세요.');}
+window.addEventListener('online',()=>{if(mode==='online'&&room&&!room.live&&!room.blocked)room.reconnect();});
+window.addEventListener('pagehide',saveOnline);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&mode==='online'&&room&&!room.blocked){if(!room.live)room.reconnect();else if(!room.host){synced=false;if(room.send({type:'sync',requestId:pendingActionId}))waitForState(pendingActionId);render();}}});

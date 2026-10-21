@@ -107,3 +107,103 @@ test('send failures return false, close the channel, and report a reconnect acti
   host.destroy();guest.destroy();
   const oversized=create(true,'TOOLARGE'),recipient=create(false,'TOOLARGE','oversize');await tick();assert.equal(oversized.send({type:'state',padding:'가'.repeat(750000)}),false);assert.equal(oversized.live,false);oversized.destroy();recipient.destroy();
 });
+
+// Manually driven peers exercise lifecycle failures without a real signaling
+// service or wall-clock sleeps. Timer mocking makes retry limits deterministic.
+class ManualChannel extends EventEmitter{
+  constructor(token='friend'){super();this.metadata={app:'augment-chess-v3',token};this.open=false;this.sent=[];this.closeCount=0;}
+  send(data){this.sent.push(data);}
+  close(){this.open=false;this.closeCount++;this.emit('close');}
+  openNow(){this.open=true;this.emit('open');}
+}
+class ManualPeer extends EventEmitter{
+  static instances=[];
+  constructor(id){super();this.id=id||'manual-guest';this.disconnected=false;this.destroyed=false;this.connections=[];this.reconnectCount=0;ManualPeer.instances.push(this);}
+  connect(id,options){const conn=new ManualChannel(options.metadata.token);this.connections.push(conn);return conn;}
+  ready(){this.disconnected=false;this.emit('open',this.id);}
+  reconnect(){if(this.destroyed)throw new Error('Peer was destroyed');this.disconnected=false;this.reconnectCount++;}
+  destroy(){this.disconnected=true;this.emit('disconnected');this.destroyed=true;this.emit('close');}
+}
+const manual=(host,extra={})=>new OnlineRoom({host,code:'RECOVERY',token:'returning-friend',PeerClass:ManualPeer,...extra});
+
+test('failed pending joins release the slot without reserving a guest identity',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const host=manual(true);host.peer.ready();
+  const abandoned=new ManualChannel('abandoned');host.peer.emit('connection',abandoned);
+  assert.equal(host.guestToken,null);
+  const competing=new ManualChannel('competitor');host.peer.emit('connection',competing);competing.openNow();
+  assert.deepEqual(competing.sent,[{type:'busy'}]);assert.equal(host.conn,abandoned);
+  t.mock.timers.tick(20000);assert.ok(abandoned.closeCount>0);assert.equal(host.connecting,false);assert.equal(host.guestToken,null);
+  const accepted=new ManualChannel('successful');host.peer.emit('connection',accepted);accepted.openNow();
+  assert.equal(host.live,true);assert.equal(host.guestToken,'successful');
+  abandoned.openNow();assert.equal(abandoned.open,false);assert.equal(host.conn,accepted);host.destroy();
+});
+
+test('restored hosts keep the established guest identity while accepting its reconnect',()=>{
+  const host=manual(true,{guestToken:'saved-guest'});host.peer.ready();
+  const stranger=new ManualChannel('stranger');host.peer.emit('connection',stranger);stranger.openNow();assert.equal(stranger.sent[0].type,'busy');
+  const guest=new ManualChannel('saved-guest');host.peer.emit('connection',guest);guest.openNow();assert.equal(host.live,true);assert.equal(host.guestToken,'saved-guest');host.destroy();
+});
+
+test('a returning guest replaces its stale open channel without a busy race',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const host=manual(true);host.peer.ready();
+  const stale=new ManualChannel('same-identity');host.peer.emit('connection',stale);stale.openNow();assert.equal(host.live,true);
+  const replacement=new ManualChannel('same-identity');host.peer.emit('connection',replacement);assert.deepEqual(stale.sent,[{type:'replaced'}]);assert.equal(host.live,false);
+  replacement.openNow();assert.equal(host.conn,replacement);assert.equal(host.live,true);assert.deepEqual(replacement.sent,[]);
+  t.mock.timers.tick(300);assert.equal(stale.open,false);assert.equal(host.live,true);host.destroy();
+});
+
+test('same-identity replacement tells the previous guest to stop retrying',async()=>{
+  const host=create(true,'TAKEOVER'),old=create(false,'TAKEOVER','shared-token');await tick();
+  let message='';old.on('error',value=>message=value);
+  const current=create(false,'TAKEOVER','shared-token');await tick();
+  assert.equal(current.live,true);assert.equal(host.live,true);assert.equal(old.live,false);assert.equal(old.blocked,true);assert.equal(old.retryTimer,null);assert.match(message,/다른 탭/);
+  host.send({type:'state',game:{rev:42}});let received;current.on('data',value=>received=value);await tick();assert.equal(received.game.rev,42);
+  host.destroy();old.destroy();current.destroy();
+});
+
+test('manual reconnect rebuilds a destroyed initial peer and ignores its stale events',()=>{
+  const host=manual(true),old=host.peer;old.emit('error',{type:'network'});old.destroy();
+  assert.doesNotThrow(()=>host.reconnect());assert.notEqual(host.peer,old);assert.equal(host.peer.id,'augmentchess-v3-RECOVERY');
+  let ready=0;host.on('ready',()=>ready++);old.ready();assert.equal(ready,0);host.peer.ready();assert.equal(ready,1);host.destroy();
+});
+
+test('initial signaling timeout rebuilds with backoff and destroy cancels recovery',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const guest=manual(false),first=guest.peer;let message='';guest.on('error',value=>message=value);
+  t.mock.timers.tick(15000);assert.equal(first.destroyed,true);assert.match(message,/응답 시간이 초과/);
+  t.mock.timers.tick(999);assert.equal(guest.peer,null);t.mock.timers.tick(1);assert.ok(guest.peer);assert.notEqual(guest.peer,first);
+  const second=guest.peer;guest.destroy();t.mock.timers.tick(100000);assert.equal(guest.peer,second);assert.equal(second.destroyed,true);
+});
+
+test('guest automatically retries a closed connection with the same identity',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const guest=manual(false);guest.peer.ready();const first=guest.conn;first.openNow();first.close();assert.equal(guest.live,false);
+  t.mock.timers.tick(999);assert.equal(guest.conn,first);t.mock.timers.tick(1);assert.notEqual(guest.conn,first);assert.equal(guest.conn.metadata.token,'returning-friend');
+  guest.conn.openNow();assert.equal(guest.live,true);assert.equal(guest.retryAttempts,0);guest.destroy();
+});
+
+test('automatic retries stop after five attempts and manual retry starts a fresh budget',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const guest=manual(false);guest.peer.ready();let message='';guest.on('error',value=>message=value);
+  for(const delay of [1000,2000,4000,8000,10000]){guest.peer.emit('error',{type:'peer-unavailable'});t.mock.timers.tick(delay);}
+  assert.equal(guest.peer.connections.length,6);guest.peer.emit('error',{type:'peer-unavailable'});assert.match(message,/자동 재연결을 완료하지 못/);
+  t.mock.timers.tick(100000);assert.equal(guest.peer.connections.length,6);guest.reconnect();assert.equal(guest.peer.connections.length,7);guest.destroy();
+});
+
+test('ICE interruptions pause input, recover within grace, or reconnect after grace',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const guest=manual(false);guest.peer.ready();const first=guest.conn;let connected=0;guest.on('connected',()=>connected++);first.openNow();
+  first.emit('iceStateChanged','disconnected');assert.equal(guest.live,false);assert.equal(guest.send({type:'sync'}),false);
+  t.mock.timers.tick(3999);first.emit('iceStateChanged','connected');assert.equal(guest.live,true);assert.equal(connected,2);t.mock.timers.tick(1);assert.equal(first.open,true);
+  first.emit('iceStateChanged','disconnected');t.mock.timers.tick(4000);assert.equal(first.open,false);t.mock.timers.tick(1000);assert.notEqual(guest.conn,first);
+  guest.conn.openNow();assert.equal(guest.live,true);guest.destroy();
+});
+
+test('busy rejection stays visible and never loops automatic retries',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const guest=manual(false);guest.peer.ready();guest.conn.openNow();const events=[];guest.on('disconnected',()=>events.push('disconnected')).on('error',value=>events.push(value));
+  guest.conn.emit('data',{type:'busy'});t.mock.timers.tick(60000);
+  assert.equal(guest.live,false);assert.equal(guest.blocked,true);assert.equal(guest.peer.connections.length,1);assert.equal(events.length,1);assert.match(events[0],/이미 진행 중/);guest.destroy();
+});
