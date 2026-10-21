@@ -2,10 +2,10 @@ import {CARDS,NAMES,OTHER,position,createGame,reduce,legalMoves,inCheck,aiMove,s
 import {OnlineRoom,roomCode} from './network.js';
 const $=id=>document.getElementById(id),side=c=>c==='w'?'백':'흑';
 const SYMBOLS={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
-let game=null,mode='lobby',myColor='w',orientation='w',selected=null,targets=[],room=null,aiTimer=null,toastTimer=null,confirmAction=null,soundOn=false,audio=null,networkMessage='',busy=false,aiLevel='normal',pendingMove=false;
+let game=null,mode='lobby',myColor='w',orientation='w',selected=null,targets=[],room=null,aiTimer=null,toastTimer=null,pendingTimer=null,confirmAction=null,soundOn=false,audio=null,networkMessage='',busy=false,aiLevel='normal',pendingMove=false;
 // Original vector silhouettes keep pieces crisp on phones and high density screens.
 const PATHS={
-  p:'M23 9a7 7 0 1 1 0 14c-4 4-4 10-8 14h16c-4-4-4-10-8-14M13 38h20v5H13Z',
+  p:'M23 9a7 7 0 1 1 0 14a7 7 0 1 1 0-14ZM21 23c-3 4-2 9-6 14h16c-4-5-3-10-6-14ZM13 38h20v5H13Z',
   r:'M11 10h6v6h4v-6h5v6h4v-6h6v13l-5 4 2 11H14l2-11-5-4ZM12 39h23v4H12Z M16 25h15',
   n:'M13 38c0-9 4-12 9-18l-7 4-5-4 9-11 2-5 5 4c10 4 12 17 8 30ZM12 39h24v4H12Z M21 14h1',
   b:'M23 5c-7 7-12 11-9 18 2 5 7 5 7 9l-7 6h19l-7-6c0-4 5-4 7-9 3-7-2-11-10-18ZM21 14l6 8M13 39h21v4H13Z',
@@ -62,12 +62,12 @@ function scheduleAI(){clearTimeout(aiTimer);if(mode!=='ai'||!game||game.result||
     const ranked=['q_leap','n_stride','b_guard','r_edge','k_stride','p_fang','p_march','p_retreat'];const id=[...game.offers.b].sort((a,b)=>ranked.indexOf(a)-ranked.indexOf(b))[0];commit({type:'choose',id},'b');
   }else{const move=aiMove(game,aiLevel);if(move)commit({type:'move',from:move.from,to:move.to,promotion:'q'},'b');}},game.phase==='draft'?900:550);}
 function commit(action,color=myColor){if(!game||!action)return;action={rev:game.rev,...action};if(mode==='online'&&!room?.live){toast('상대와 다시 연결한 뒤 계속할 수 있습니다.');return;}
-  if(mode==='online'&&!room.host){if(pendingMove)return;pendingMove=true;room.send({type:'action',action});selected=null;targets=[];render();setTimeout(()=>{if(pendingMove){pendingMove=false;room?.send({type:'sync'});toast('동기화를 다시 요청했습니다.');render();}},4000);return;}
+  if(mode==='online'&&!room.host){if(pendingMove)return;pendingMove=true;room.send({type:'action',action});selected=null;targets=[];render();clearTimeout(pendingTimer);pendingTimer=setTimeout(()=>{if(pendingMove){pendingMove=false;room?.send({type:'sync'});toast('동기화를 다시 요청했습니다.');render();}},4000);return;}
   const next=reduce(game,action,color);if(!next)return;const wasMove=action.type==='move';game=next;selected=null;targets=[];if(wasMove)beep();if(mode==='online'){if(game.rematch.length===2){game=createGame(crypto.getRandomValues(new Uint32Array(1))[0]);toast('새 대전이 시작됐습니다.');}room.send({type:'state',game});}render();
 }
-function acceptState(next){if(!next||!Array.isArray(next.board)||next.board.length!==64||!Number.isInteger(next.rev)||!['draft','play','over'].includes(next.phase))return;const moved=game&&next.ply!==game.ply;game=next;pendingMove=false;selected=null;targets=[];if(moved)beep();render();}
+function acceptState(next){if(!next||!Array.isArray(next.board)||next.board.length!==64||!Number.isInteger(next.rev)||!['draft','play','over'].includes(next.phase))return;const moved=game&&next.ply!==game.ply;game=next;clearTimeout(pendingTimer);pendingMove=false;selected=null;targets=[];if(moved)beep();render();}
 function showConfirm(title,desc,fn){closeDraft();$('confirm-title').textContent=title;$('confirm-desc').textContent=desc;confirmAction=fn;$('confirm-dialog').showModal();}
-function disconnect(){room?.destroy();room=null;pendingMove=false;networkMessage='';clearTimeout(aiTimer);}
+function disconnect(){room?.destroy();room=null;clearTimeout(pendingTimer);pendingMove=false;networkMessage='';clearTimeout(aiTimer);}
 function reset(){disconnect();game=null;mode='lobby';selected=null;targets=[];orientation='w';myColor='w';closeDraft();const url=new URL(location.href);url.hash='';history.replaceState(null,'',url);render();}
 function practice(nextMode){disconnect();mode=nextMode;myColor='w';orientation='w';game=createGame(crypto.getRandomValues(new Uint32Array(1))[0]);selected=null;targets=[];render();}
 function startOnline(host,code){disconnect();mode='online';game=null;myColor=host?'w':'b';orientation=myColor;selected=null;targets=[];networkMessage='온라인 연결 서버에 접속하고 있습니다.';$('room-code').textContent=code;
