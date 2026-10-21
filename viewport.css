@@ -1,0 +1,206 @@
+/* A game-sized shell: the board uses both the viewport width and height. */
+html { height: 100%; }
+body { height: 100dvh; display: flex; flex-direction: column; }
+.topbar { height: 46px; min-height: 46px; padding: 0 22px; }
+.brand { font-size: 13px; gap: 9px; }
+.brand-icon { font-size: 29px; }
+.brand-icon i { font-size: 12px; }
+.beta { font-size: 7px; padding: 3px 4px; }
+nav { gap: 20px; }
+nav .text-button, .source-link { font-size: 10px; }
+#match-details { display: none; }
+main { flex: 1; min-height: 0; width: 100%; max-width: 1400px; margin: 0 auto; padding: 10px 16px 8px; display: grid; grid-template-rows: 44px minmax(0,1fr) 22px; gap: 8px; }
+.intro { margin: 0; align-items: center; }
+.intro .eyebrow, .intro p, .intro-note, .mobile-break { display: none; }
+h1 { font-size: 23px; margin: 0; letter-spacing: -1px; line-height: 1.3; }
+.arena { min-height: 0; min-width: 0; height: 100%; display: grid; grid-template-columns: clamp(172px,19vw,240px) minmax(0,1fr) clamp(172px,19vw,240px); gap: 12px; align-items: stretch; }
+.left-panel, .right-panel, .board-section { min-height: 0; min-width: 0; }
+.left-panel { display: flex; flex-direction: column; gap: 10px; }
+.right-panel { grid-column: auto; display: grid; grid-template-rows: auto auto minmax(0,1fr); gap: 10px; }
+.panel { padding: 13px; margin: 0; border-radius: 8px; min-width: 0; }
+.section-label { font-size: 8px; letter-spacing: .8px; }
+.section-label > span:not(.live-dot) { font-size: 8px; }
+.lobby-panel { min-height: 0; }
+.lobby-panel h2, .lobby-panel > .muted, .lobby-panel > .network-note, .tiny-note { display: none; }
+.lobby-panel > .primary { margin-top: 13px; }
+.button { font-size: 11px; padding: 8px 10px; min-height: 34px; }
+.or { font-size: 8px; margin: 12px 0 8px; gap: 6px; }
+input { padding: 9px; font-size: 10px; height: 34px; }
+.join { min-height: 34px; width: 34px; padding: 0; font-size: 19px; }
+.practice-label { margin: 13px 0 5px; padding-top: 11px; font-size: 8px; }
+.mode-option { gap: 8px; padding: 7px 0; }
+.mode-symbol { width: 28px; height: 30px; font-size: 22px; flex-shrink: 0; }
+.mode-option strong { font-size: 10px; }
+.mode-option small { font-size: 8px; margin-top: 3px; line-height: 1.5; }
+.mode-option > span:last-child { font-size: 11px; }
+.augment-panel { min-height: 0; padding-bottom: 12px; }
+.empty-aug { padding-top: 8px; gap: 7px; }
+.empty-aug > span { font-size: 24px; }
+.empty-aug p { font-size: 9px; margin: 3px 0; line-height: 1.6; }
+.empty-aug small { font-size: 8px; margin-top: 3px; }
+.aug-item { padding-top: 10px; gap: 7px; min-width: 0; }
+.aug-item > span { width: 26px; height: 29px; font-size: 21px; flex-shrink: 0; }
+.aug-item strong { font-size: 10px; }
+.aug-item small { font-size: 8px; margin-top: 3px; }
+.board-section { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.board-wrap { width: min(100%,calc(100dvh - 246px)); aspect-ratio: 1; flex: 0 0 auto; border-width: 4px; }
+#board { width: 100%; height: 100%; }
+.sq { min-width: 0; min-height: 0; }
+.player-strip, .board-toolbar { width: min(100%,calc(100dvh - 246px)); flex-shrink: 0; }
+.player-strip { height: 35px; gap: 8px; padding-bottom: 6px; }
+.bottom-strip { padding-top: 6px; padding-bottom: 0; }
+.player-avatar { width: 27px; height: 27px; font-size: 23px; border-radius: 6px; flex-shrink: 0; }
+.player-name { min-width: 0; }
+.player-name strong { font-size: 10px; }
+.player-name small { font-size: 8px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-tag { font-size: 7px; padding: 3px 4px; margin-left: 0; flex-shrink: 0; }
+.captured { font-size: 12px; max-width: 85px; flex-shrink: 1; }
+.board-toolbar { height: 26px; margin-top: 5px; padding-top: 4px; font-size: 7px; }
+.icon-button { font-size: 17px; padding: 3px 7px; }
+.board-watermark strong { font-size: 14px; }
+.board-watermark small { font-size: 9px; }
+.board-watermark > span { font-size: 24px; margin-bottom: 7px; }
+.status-panel { min-height: 0; padding: 13px; }
+.status-icon { display: none; }
+.status-panel h2 { font-size: 15px; margin: 12px 0 6px; line-height: 1.5; }
+.status-panel .muted { font-size: 9px; line-height: 1.7; margin: 0; min-height: 0; }
+#game-actions { padding-top: 11px; gap: 15px; }
+#game-actions button { font-size: 10px; }
+#draw-answer p { font-size: 9px; margin: 8px 0; }
+#draw-answer .button { min-height: 28px; padding: 4px; }
+#rematch { margin-top: 10px; }
+#rematch-status { margin-top: 7px; font-size: 8px; }
+.timeline-panel { margin: 0; padding: 13px; }
+.timeline { margin-top: 10px; }
+.timeline:before { left: 10px; top: 10px; bottom: 10px; }
+.timeline-item { gap: 8px; margin-top: 10px; }
+.timeline-item > span { width: 21px; height: 21px; font-size: 11px; flex-shrink: 0; }
+.timeline-item strong { font-size: 9px; }
+.timeline-item small { font-size: 8px; margin-top: 2px; }
+.timeline-item > b { font-size: 8px; }
+.history-panel { display: flex; flex-direction: column; min-height: 0; margin: 0; padding: 13px; }
+.history-panel #history { flex: 1; min-height: 0; height: auto; margin-top: 9px; }
+.empty-history { font-size: 9px; padding-top: 8px; }
+.empty-history span { font-size: 8px; }
+.history-move { font-size: 8px; padding: 6px 3px; grid-template-columns: 17px 1fr 1fr; }
+.history-event { font-size: 8px; padding: 6px 3px; }
+#room-panel h2 { font-size: 17px; margin: 10px 0 6px; }
+#room-panel .muted { font-size: 9px; line-height: 1.7; }
+#room-code-box { margin-top: 12px; padding-top: 12px; }
+#room-code-box > small { font-size: 8px; }
+.room-code { font-size: 22px; letter-spacing: 2px; margin: 10px 0 12px; }
+.copy-code { margin-top: 7px; font-size: 10px; }
+#room-panel .network-note { font-size: 8px; margin-top: 9px; }
+.leave { margin-top: 10px; font-size: 10px; }
+#reconnect { margin-top: 9px; }
+footer { margin: 0; padding: 0; border-top: 1px solid var(--border); gap: 8px; font-size: 8px; flex-wrap: nowrap; }
+footer > span:nth-child(2) { font-size: 7px; }
+footer .text-button { font-size: 9px; white-space: nowrap; }
+dialog { max-height: calc(100dvh - 24px); padding: 20px; }
+.draft-intro { margin: 8px 0 18px; }
+.draft-spark { font-size: 27px; }
+.draft-intro h2 { font-size: 24px; margin: 6px 0; }
+.draft-intro p { font-size: 10px; }
+.draft-card { padding: 16px; min-height: 220px; }
+.card-piece { font-size: 43px; margin: 8px auto 3px; }
+.draft-card h3 { font-size: 15px; margin: 6px 0 8px; }
+.draft-card p { font-size: 10px; margin-bottom: 15px; }
+.draft-foot { margin-top: 14px; font-size: 9px; }
+.details-history { margin-top: 18px; }
+.details-history .history-move { font-size: 11px; padding: 9px 6px; }
+.details-history .history-event { font-size: 10px; }
+
+@media (max-height:620px) and (min-width:761px) {
+  main { grid-template-rows: 30px minmax(0,1fr) 20px; padding-top: 6px; gap: 6px; }
+  h1 { font-size: 20px; }
+  .board-wrap,.player-strip,.board-toolbar { width: min(100%,calc(100dvh - 216px)); }
+  .panel { padding: 10px; }
+  .left-panel,.right-panel { gap: 7px; }
+  .mode-option small,.empty-aug small { display: none; }
+  .practice-label { margin-top: 9px; padding-top: 8px; }
+  .mode-option { padding: 5px 0; }
+  .timeline-item { margin-top: 6px; }
+  .timeline-item small { font-size: 7px; }
+  .status-panel h2 { margin-top: 8px; }
+  .draft-intro { margin-bottom: 10px; }
+  .draft-spark { display: none; }
+  .draft-card { min-height: 195px; }
+}
+
+/* Narrow screens keep the board and controls visible; the full log has its own dialog. */
+@media (max-width:760px) {
+  .topbar { height: 44px; min-height: 44px; padding: 0 12px; }
+  .brand { font-size: 10px; gap: 6px; letter-spacing: .6px; }
+  .brand-icon { font-size: 25px; }
+  .beta,.source-link { display: none; }
+  nav { gap: 12px; }
+  nav .text-button { font-size: 9px; }
+  nav span { display: none; }
+  #match-details { display: inline-block; }
+  main { padding: 6px 10px; grid-template-rows: minmax(0,1fr) 22px; gap: 6px; }
+  .intro { display: none; }
+  .arena { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) auto; gap: 6px; }
+  .left-panel,.right-panel { display: contents; }
+  .lobby-panel { grid-row: 1; grid-column: 1/-1; display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; padding: 8px; width: 100%; }
+  .lobby-panel > .section-label,.lobby-panel > .or,.lobby-panel > .practice-label { display: none; }
+  .lobby-panel > .primary { grid-row: 1; grid-column: 1; margin: 0; font-size: 10px; }
+  .lobby-panel > form { grid-row: 1; grid-column: 2; }
+  .lobby-panel > .mode-option { grid-row: 2; grid-column: auto; padding: 2px 6px; }
+  .mode-option small,.mode-option > span:last-child { display: none; }
+  .mode-symbol { width: 24px; height: 25px; font-size: 20px; }
+  .board-section { grid-column: 1/-1; grid-row: 2; width: 100%; order: initial; }
+  .board-wrap,.player-strip,.board-toolbar { width: min(100%,calc(100dvh - 358px)); }
+  .player-strip { height: 29px; padding-bottom: 4px; }
+  .bottom-strip { padding-top: 4px; padding-bottom: 0; }
+  .player-avatar { width: 24px; height: 24px; font-size: 20px; }
+  .player-name small { font-size: 7px; }
+  .player-name strong { font-size: 9px; }
+  .board-toolbar { height: 23px; margin-top: 3px; padding-top: 2px; }
+  .board-toolbar > span { font-size: 6px; letter-spacing: 0; }
+  .icon-button { padding: 2px 6px; }
+  .augment-panel { grid-column: 1; grid-row: 3; padding: 9px; margin: 0; order: initial; }
+  .status-panel { grid-column: 2; grid-row: 3; padding: 9px; margin: 0; width: 100%; }
+  .status-panel h2 { font-size: 12px; margin: 7px 0 4px; }
+  .status-panel .muted { font-size: 8px; line-height: 1.5; }
+  .empty-aug { gap: 5px; }
+  .empty-aug p { font-size: 8px; }
+  .empty-aug small { display: none; }
+  #my-augments:has(.aug-item) { display: block; }
+  .aug-item { min-width: 0; padding: 5px 0 0; gap: 5px; }
+  .aug-item > span { width: 21px; height: 22px; font-size: 18px; }
+  .aug-item strong { font-size: 8px; }
+  .aug-item small { display: none; }
+  .timeline-panel,.history-panel { display: none; }
+  #game-actions { gap: 12px; padding-top: 6px; }
+  #game-actions button { font-size: 9px; }
+  #room-panel { grid-column: 1/-1; grid-row: 1; padding: 8px 10px; }
+  #room-panel > .section-label,#room-panel h2,#room-panel .network-note { display: none; }
+  #room-panel .muted { font-size: 8px; line-height: 1.4; margin: 0 0 5px; }
+  #room-code-box { display: flex; align-items: center; gap: 8px; border: 0; margin: 0; padding: 0; }
+  #room-code-box > small { display: none; }
+  .room-code { font-size: 17px; letter-spacing: 1px; margin: 0; }
+  #copy-link { min-height: 28px; padding: 4px 7px; font-size: 9px; width: auto; margin-left: auto; }
+  #copy-code { margin: 0; font-size: 8px; }
+  #room-panel .leave { font-size: 8px; margin: 4px 0 0; }
+  #reconnect { min-height: 25px; padding: 2px 7px; width: auto; display: inline-flex; font-size: 9px; margin: 4px 8px 0 0; }
+  body[data-playing="true"]:not([data-mode="online"]) .board-section { grid-row: 1 / span 2; }
+  body[data-playing="true"]:not([data-mode="online"]) .board-wrap,
+  body[data-playing="true"]:not([data-mode="online"]) .player-strip,
+  body[data-playing="true"]:not([data-mode="online"]) .board-toolbar { width: min(100%,calc(100dvh - 272px)); }
+  footer { font-size: 7px; }
+  footer > span:nth-child(2) { display: none; }
+  footer .text-button { font-size: 9px; }
+  dialog { padding: 16px; max-height: calc(100dvh - 16px); }
+  .draft-intro { margin: 7px 0 12px; }
+  .draft-spark { display: none; }
+  .draft-intro h2 { font-size: 19px; margin: 5px 0; }
+  .draft-intro p { font-size: 9px; }
+  .draft-cards { display: flex; flex-direction: column; gap: 7px; }
+  .draft-card { padding: 11px 12px 11px 60px; min-height: 0; }
+  .card-piece { position: absolute; left: 15px; top: 22px; margin: 0; font-size: 35px; }
+  .card-top { font-size: 8px; }
+  .draft-card h3 { font-size: 13px; margin: 5px 0; }
+  .draft-card p { font-size: 9px; line-height: 1.7; margin-bottom: 7px; }
+  .card-select { font-size: 9px; padding-top: 6px; }
+  .draft-foot { font-size: 8px; margin: 10px 0 0; }
+}
