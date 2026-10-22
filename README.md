@@ -1,8 +1,10 @@
 # AUGMENT CHESS · 증강체스
 
-[플레이하기](https://leejuhan-1214.github.io/augment-chess/?v=3.0.0)
+[플레이하기](https://leejuhan-1214.github.io/augment-chess/?v=3.1.0)
 
-한국어 브라우저 체스 게임. v3.0.0은 augmentchess.org의 공개 카드 목록
+한국어 브라우저 체스 게임. v3.1.0에는 바둑 × 체스 모드를 추가했습니다. 기존 모드는 로비에서 선택할 수 있습니다.
+
+v3.0.0부터 augmentchess.org의 공개 카드 목록
 272종을 바탕으로 독립 구현한 카드 모드를 기본으로 사용합니다.
 
 - RULE 27 · OPENING 42 · MIDDLE 97 · PIECE 43 · END 63
@@ -17,6 +19,19 @@
 세부 능력과 희귀한 카드 조합에는 차이가 있습니다. 원본의 코드/일러스트/
 로고는 복사하지 않았으며 카드 설명은 효과를 기준으로 다시 작성했습니다.
 출처와 범위: [CARD-SOURCES.md](CARD-SOURCES.md).
+
+## 바둑 × 체스 규칙
+
+- 기본 새 게임은 바둑 혼합 모드. 로비의 게임 규칙에서 기존 증강체스로 전환
+- 한 턴에 체스 기물 이동 또는 빈칸에 바둑돌 한 개 착수
+- 같은 색 돌과 기물이 상하좌우로 연결되면 활로를 공유. 활로가 0이면 무리 전체 포획
+- 포위는 보호/가호와 무관하며 킹도 포획. 기물을 선택하면 활로, 단수이면 붉은 테두리 표시
+- 돌은 이동/일반 포획/카드 변신/제물 대상에서 제외. 폭발 등 특수 제거 효과는 적용
+- 돌 착수의 자충수 및 직전 판으로 되돌리는 즉시 패 금지
+- 체스 이동으로 자기 무리의 마지막 활로를 없애면 그 무리도 제거
+- 두 번 연속 패스하면 면적 계가: 살아 있는 돌·기물 칸 + 단독 색이 둘러싼 빈칸. 덤/사석 추가점 없음
+- AI의 돌 착수, 카드, 지연 효과, 10·20수 드래프트, 저장된 대전 복원 지원
+- 기존 272종 카드에도 적용되며 카드 조합에 따른 원본 판정 차이는 아래 설명 참고
 
 ## 대전
 
@@ -35,15 +50,16 @@ Node.js 20 이상. 별도 패키지 설치/빌드 없이 정적 파일로 실행
 
 ```sh
 node serve.mjs
-node --test engine.test.js variant-engine.test.js network.test.js ui-rules.test.js online-session.test.js app-online.test.js
+node --test go-rules.test.js engine.test.js variant-engine.test.js network.test.js ui-rules.test.js online-session.test.js app-online.test.js
 ```
 
-총 91개 검사: 기존 체스/통신 회귀, 카드 전체 목록·효과 등록, 초기 지속효과,
+총 109개 검사: 기존 체스/통신 회귀, 카드 전체 목록·효과 등록, 초기 지속효과,
 특수능력 시나리오, 결정론적 혼합 대국 및 JSON 스냅샷 왕복을 포함합니다.
 모든 카드 조합을 전수 검증한 것은 아닙니다.
 
 ## 파일
 
+- go-rules.js / go.css: 연결 무리·활로·착수·패·포위·계가 및 혼합 모드 화면
 - game-engine.js: 저장된 대전의 규칙 버전에 따라 엔진 선택
 - variant-engine.js / variant-core.js / variant-effects.js: 새 카드 규칙
 - original-cards.js / variant-cards.js / variant-pieces.js: 카드/기물 정의

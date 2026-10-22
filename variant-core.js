@@ -1,7 +1,7 @@
-import {ORTHO,DIAG,KING,KNIGHT,PIECES,NAMES,PAWNS,MINORS,MAJORS,isRoyal,inside,row,col,dist,around,side,value} from './variant-pieces.js';
+import {ORTHO,DIAG,KING,KNIGHT,PIECES,NAMES,PAWNS,MINORS,MAJORS,isRoyal,inside,row,col,dist,around,side,value} from './variant-pieces.js?v=3.1.0';
 export {NAMES,PIECES,PAWNS,MINORS,MAJORS,isRoyal,around,dist,row,col,value};
 export const OTHER=side,squareName=i=>'abcdefgh'[col(i)]+(8-row(i));
-export const own=(s,c,predicate=()=>true)=>s.board.map((p,i)=>({p,i})).filter(({p,i})=>p?.c===c&&predicate(p,i));
+export const own=(s,c,predicate=()=>true)=>s.board.map((p,i)=>({p,i})).filter(({p,i})=>p?.c===c&&p.t!=='stone'&&predicate(p,i));
 export function has(s,c,key){return s.aug[c]?.includes('ac-'+key)||s.echoes[c]?.includes('ac-'+key)||((s.aug[c]?.includes('ac-clone')||s.echoes[c]?.includes('ac-clone'))&&s.passiveKeys?.includes(key)&&s.aug[side(c)]?.includes('ac-'+key));}
 export const rule=(s,key)=>s.rules.includes(key);
 export const random=s=>{let x=s.rng|0;x^=x<<13;x^=x>>>17;x^=x<<5;s.rng=x>>>0;return s.rng/4294967296;};
@@ -16,9 +16,10 @@ export const empty=(s,filter=()=>true)=>Array.from({length:64},(_,i)=>i).filter(
 export const kingAt=(s,c)=>s.board.findIndex(p=>p?.c===c&&isRoyal(p));
 export function spawn(s,c,t,to,extra={}){if(to===undefined||to<0||to>63||s.board[to]||s.void.includes(to))return false;s.board[to]=piece(s,c,t,{home:to,...extra});return true;}
 export function nearSpawn(s,c,t,origin,extra={}){return spawn(s,c,t,pick(s,around(origin).filter(i=>!s.board[i]&&!s.void.includes(i))),extra);}
-export function transform(s,index,t){const p=s.board[index];if(!p)return false;const royal=isRoyal(p);s.board[index]={...p,t,moved:true,bornAt:s.ply,royal};return true;}
+export function transform(s,index,t){const p=s.board[index];if(!p||p.t==='stone')return false;const royal=isRoyal(p);s.board[index]={...p,t,moved:true,bornAt:s.ply,royal};return true;}
 export function remove(s,index,{force=false,attacker=null}={}){
   const p=s.board[index];if(!p)return null;
+  if(p.t==='stone'){if(!force)return null;s.board[index]=null;return p;}
   if(!force&&protectedPiece(s,p,index))return null;
   s.board[index]=null;if(['w','b'].includes(p.c)){s.graveyard[p.c].push({...p});s.lastLost[p.c]=s.ply;}
   s.lastCaptured=p.t;
@@ -46,6 +47,7 @@ export function protectedPiece(s,p,index){
 }
 function captureAllowed(s,p,from,target,to,attacks){
   if(!target)return true;
+  if(target.t==='stone')return false;
   if(target.c===p.c&&p.t!=='dragon'&&!(p.t==='n'&&has(s,p.c,'mad-horse')))return false;
   if(target.c==='x'&&target.t==='cover')return false;
   if(protectedPiece(s,target,to))return false;
@@ -66,6 +68,7 @@ function captureAllowed(s,p,from,target,to,attacks){
 }
 export function pseudo(s,from,attacks=false,override=null,depth=0){
   const p=s.board[from];if(!p||depth>3)return [];
+  if(p.t==='stone')return [];
   if(!attacks&&(active(s,p,'freezeUntil')||active(s,p,'boundUntil')||p.bound||p.metalReady>s.ply||s.forced?.[p.c]&&s.forced[p.c]!==p.uid))return [];
   let t=override||p.form||p.t;if(buff(s,p.c,'socialism')&&!isRoyal(p))t='p';if(!override&&buff(s,p.c,'reversal')&&['r','b'].includes(t))t=t==='r'?'b':'r';
   const r=row(from),c=col(from),d=p.c==='w'?-1:1,moves=[];

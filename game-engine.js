@@ -1,9 +1,12 @@
 import * as legacy from './engine.js?v=2.0.0';
-import * as original from './variant-engine.js?v=3.0.0';
-export {PIECES} from './variant-pieces.js?v=3.0.0';
+import * as original from './variant-engine.js?v=3.1.0';
+export {PIECES} from './variant-pieces.js?v=3.1.0';
+export {goEnabled,groupAt,groups,areaScore,legalStones,stonePosition} from './go-rules.js?v=3.1.0';
 export const CARDS=[...original.CARDS,...legacy.CARDS],NAMES=original.NAMES,OTHER=original.OTHER,squareName=original.squareName;
 const engine=s=>s?.variant==='ac272'?original:legacy;
-export const position=original.position,createGame=(seed,variant='ac272')=>variant==='legacy'?legacy.createGame(seed):original.createGame(seed);
+let preferredVariant='go-chess';
+export const setDefaultVariant=variant=>{preferredVariant=variant==='ac272'?'ac272':'go-chess';};
+export const position=original.position,createGame=(seed,variant=preferredVariant)=>variant==='legacy'?legacy.createGame(seed):original.createGame(seed,variant==='go-chess');
 export const reduce=(s,...args)=>engine(s).reduce(s,...args);
 export const legalMoves=(s,...args)=>engine(s).legalMoves(s,...args);
 export const legalAbilities=(s,...args)=>engine(s).legalAbilities(s,...args);

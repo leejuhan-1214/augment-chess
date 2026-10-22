@@ -1,4 +1,4 @@
-import {OTHER,attacked,inCheck,legalMoves,squareName} from './game-engine.js?v=3.0.0';
+import {OTHER,attacked,inCheck,legalMoves,squareName} from './game-engine.js?v=3.1.0';
 
 // Keep the explanatory controls and the board shortcut subject to the same rules.
 export function castleStatus(s,color=s?.turn){

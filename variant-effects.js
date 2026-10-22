@@ -1,6 +1,6 @@
 import {CARDS,CARD_BY_KEY,TRANSFORMS} from './variant-cards.js';
-import {own,has,rule,random,pick,shuffle,grant,defer,spawn,nearSpawn,transform,remove,empty,kingAt,piece,pseudo,around,dist,row,col,value,PAWNS,MINORS,MAJORS,isRoyal} from './variant-core.js';
-import {ORTHO,KING,PIECES} from './variant-pieces.js';
+import {own,has,rule,random,pick,shuffle,grant,defer,spawn,nearSpawn,transform,remove,empty,kingAt,piece,pseudo,around,dist,row,col,value,PAWNS,MINORS,MAJORS,isRoyal} from './variant-core.js?v=3.1.0';
+import {ORTHO,KING,PIECES} from './variant-pieces.js?v=3.1.0';
 const enemy=c=>c==='w'?'b':'w',ROYAL=1e9;
 const tagRandom=(s,c,filter,property,count=1,value=true)=>shuffle(s,own(s,c,filter)).slice(0,count).forEach(({p})=>p[property]=value);
 export function bigPiece(s,c,type,at){
@@ -20,7 +20,7 @@ export function applyRule(s,key){
   if(key==='monster')spawn(s,'x','monster',pick(s,empty(s,i=>center.includes(i))));
   if(key==='capture-the-flag')s.flags={w:pick(s,Array.from({length:8},(_,i)=>56+i)),b:pick(s,Array.from({length:8},(_,i)=>i))};
   if(key==='monochrome-chess')for(const q of s.board)if(q?.t==='n')q.t='camel';
-  if(key==='chess-n-pow-30')for(const {p,i} of [...own(s,'w'),...own(s,'b')])if(!isRoyal(p))transform(s,i,pick(s,Object.keys(PIECES).filter(t=>!['k','merchant','core','cover','crown','football','colossus','big-rook','big-bishop'].includes(t))));
+  if(key==='chess-n-pow-30')for(const {p,i} of [...own(s,'w'),...own(s,'b')])if(!isRoyal(p))transform(s,i,pick(s,Object.keys(PIECES).filter(t=>!['stone','k','merchant','core','cover','crown','football','colossus','big-rook','big-bishop'].includes(t))));
   if(key==='chess-960'||key==='chess-344200')for(const c of ['w','b']){
     const indices=own(s,c,p=>key==='chess-344200'||!PAWNS.has(p.t)).map(q=>q.i),units=indices.map(i=>s.board[i]);
     indices.forEach(i=>s.board[i]=null);const positions=shuffle(s,indices);
@@ -106,7 +106,7 @@ export function castEffect(s,key,c,picks=[],choice=null){
   if(key==='ascension'){const saved={...pa};remove(s,a,{force:true});defer(s,6,'land',{p:saved,to:b});return;}
   if(key==='greek-gift'){remove(s,a,{force:true});defer(s,1,'greek-gift',{c});return;}
   if(key==='miracle'){const targets=pseudo(s,a).filter(m=>s.board[m.to]?.c===them);for(const move of targets){s.board[move.to].c=c;s.board[move.to].moved=true;}remove(s,a,{force:true});return;}
-  if(key==='random-roulette'){transform(s,a,pick(s,Object.keys(PIECES).filter(t=>!['k','merchant','cover','core','crown','colossus','big-rook','big-bishop'].includes(t))));return;}
+  if(key==='random-roulette'){transform(s,a,pick(s,Object.keys(PIECES).filter(t=>!['stone','k','merchant','cover','core','crown','colossus','big-rook','big-bishop'].includes(t))));return;}
   if(key==='feudal-contract'){pa.contract=pb.uid;return;}
   if(key==='blockade'){for(const to of around(me))spawn(s,'x','cover',to,{expires:s.ply+6});return;}
   if(key==='schrodinger-pawns'){for(const {p,i}of shuffle(s,own(s,c,p=>PAWNS.has(p.t))).slice(0,4)){const to=i+(c==='w'?8:-8);if(to>=0&&to<64&&!s.board[to]){s.board[to]={...p,quantum:true,disarmedUntil:s.ply};p.quantum=true;p.disarmedUntil=s.ply;}}return;}

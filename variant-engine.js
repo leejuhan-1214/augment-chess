@@ -1,7 +1,8 @@
-import * as V from './variant-core.js';
+import * as V from './variant-core.js?v=3.1.0';
+import {goEnabled,enableGo,groupAt,groups,settleGo,legalStones,stonePosition,boardKey,areaScore,scoreResult} from './go-rules.js?v=3.1.0';
 import {CARDS,CARD_BY_KEY,SPECS} from './variant-cards.js';
-import {acquireEffect,castEffect,applyRule} from './variant-effects.js';
-import {ORTHO,DIAG,KING,KNIGHT,inside,PIECES,PAWNS,MINORS,MAJORS,isRoyal,around,row,col,dist,value,side} from './variant-pieces.js';
+import {acquireEffect,castEffect,applyRule} from './variant-effects.js?v=3.1.0';
+import {ORTHO,DIAG,KING,KNIGHT,inside,PIECES,PAWNS,MINORS,MAJORS,isRoyal,around,row,col,dist,value,side} from './variant-pieces.js?v=3.1.0';
 import {position as initialPosition} from './engine.js?v=2.0.0';
 export {CARDS};
 export const NAMES=V.NAMES,OTHER=side,squareName=V.squareName,inCheck=V.inCheck,attacked=V.attacked;
@@ -19,11 +20,13 @@ function deal(s,color){
   const bag=[];for(const card of pool)for(let n=0;n<({COMMON:6,RARE:4,EPIC:2,LEGEND:1}[card.rarity]||1);n++)bag.push(card.id);
   return [...new Set(V.shuffle(s,bag))].slice(0,3);
 }
-export function createGame(seed=Date.now()){const s=position();s.rng=(seed>>>0)||1234567;s.phase='draft';s.draftTurn='w';s.offers={w:deal(s,'w'),b:deal(s,'b')};return s;}
+export function createGame(seed=Date.now(),hybrid=false){const s=position();if(hybrid)enableGo(s);s.rng=(seed>>>0)||1234567;s.phase='draft';s.draftTurn='w';s.offers={w:deal(s,'w'),b:deal(s,'b')};return s;}
+export {legalStones,groupAt,groups,areaScore};
 export const abilityRemaining=(s,c,id)=>Math.max(0,s.uses?.[c]?.[id]||0);
 export function effectTags(s,index){const p=s.board[index];if(!p)return [];return [V.protectedPiece(s,p,index)?'보호':null,V.active(s,p,'freezeUntil')?'빙결':null,V.active(s,p,'boundUntil')||p.bound?'속박':null,p.blessing?'가호':null,p.evasion?'회피':null,p.chameleon?'변이':null,p.submerge?'잠복':null,p.hidden?'은신':null,p.counter?'반격':null,p.metal?'금속':null,p.quantum?'중첩':null,p.recurrence?'회귀':null].filter(Boolean);}
 function eligible(s,color,picks,kind,i){
   const p=s.board[i],a=s.board[picks[0]],own=p?.c===color,other=p?.c===side(color);if(picks.includes(i))return false;
+  if(p?.t==='stone'&&!['anySquare','file'].includes(kind))return false;
   switch(kind){
     case 'anySquare':return !s.void.includes(i);
     case 'file':return row(i)===(color==='w'?7:0);
@@ -200,7 +203,7 @@ function movePiece(s,m,promotion='q',hooks=true){
   if(oldType==='thief'&&m.jumped)extra=true;
   if(oldType==='squire'&&captured)V.transform(s,m.to,'n');
   if(m.checkerCapture&&s.board[m.to]&&V.pseudo(s,m.to).some(m=>m.checkerCapture)){extra=true;s.forced[c]=p.uid;}
-  if(oldType==='trickster')p.form=V.pick(s,Object.keys(PIECES).filter(t=>!['trickster','colossus','big-rook','big-bishop','cover','core'].includes(t)));
+  if(oldType==='trickster')p.form=V.pick(s,Object.keys(PIECES).filter(t=>!['stone','trickster','colossus','big-rook','big-bishop','cover','core'].includes(t)));
   if(oldType==='slime')V.spawn(s,c,'slime',m.from);
   if(oldType==='missionary'&&row(m.to)===(c==='w'?0:7))for(const {p:q}of V.own(s,c,q=>q.t==='missionary'))q.t='b';
   if(oldType==='recruiter')V.spawn(s,c,'p',m.from);
@@ -226,6 +229,7 @@ function movePiece(s,m,promotion='q',hooks=true){
 }
 function stateKey(s){return JSON.stringify([s.board.map(p=>p?[p.c,p.t,!!p.moved,!!p.blessing,!!p.evasion,p.boundUntil>=s.ply,p.freezeUntil>=s.ply]:null),s.turn,s.castle,s.ep,s.aug,s.uses,s.rules]);}
 function terminal(s){
+  if(goEnabled(s))for(const c of ['w','b'])if(V.kingAt(s,c)<0)return {winner:side(c),reason:'킹 포획 · 포위 포함'};
   if(s.result)return s.result;
   for(const c of ['w','b'])if(V.kingAt(s,c)<0)return {winner:side(c),reason:'킹 포획'};
   for(const c of ['w','b']){const units=V.own(s,c),foe=side(c),k=V.kingAt(s,c);
@@ -241,10 +245,10 @@ function terminal(s){
   if(V.rule(s,'revelation')&&s.ply>=120){const totals=['w','b'].map(c=>V.own(s,c,p=>!isRoyal(p)).reduce((v,q)=>v+value(q.p),0));return {winner:totals[0]===totals[1]?null:totals[0]>totals[1]?'w':'b',reason:'계시 · 기물 점수'};}
   if(s.half>=100)return {winner:null,reason:'50수 규칙'};
   if((s.seen[stateKey(s)]||0)>=3)return {winner:null,reason:'동일 포지션 3회 반복'};
-  if(!s.trolley&&!legalMoves(s).length&&!legalAbilities(s).length&&!legalPowers(s).length)return {winner:side(s.turn),reason:'이동 가능한 기물 없음'};
+  if(!goEnabled(s)&&!s.trolley&&!legalMoves(s).length&&!legalAbilities(s).length&&!legalPowers(s).length)return {winner:side(s.turn),reason:'이동 가능한 기물 없음'};
   return null;
 }
-function conclude(s,previousPly){s.result=terminal(s);if(s.result)s.phase='over';else if(s.ply!==previousPly&&[20,40].includes(s.ply)&&s.aug.w.length<3){s.phase='draft';s.draftTurn='w';s.offers={w:deal(s,'w'),b:deal(s,'b')};}s.rev++;return s;}
+function conclude(s,previousPly,color){if(goEnabled(s))settleGo(s,color);s.result=terminal(s);if(s.result)s.phase='over';else if(s.ply!==previousPly&&[20,40].includes(s.ply)&&s.aug.w.length<3){s.phase='draft';s.draftTurn='w';s.offers={w:deal(s,'w'),b:deal(s,'b')};}s.rev++;return s;}
 function endMove(s,c,extra=false){if(s.extraMoves[c]>0){s.extraMoves[c]--;extra=true;}if(V.rule(s,'acceleration')&&s.ply>=5&&!s.accelerated){extra=true;s.accelerated=true;}else if(!extra)s.accelerated=false;if(!extra){s.forced[c]=null;s.idolUsed=false;s.resolveUsed={};s.turnMoves=0;s.turnCards=0;finishTurn(s,c);}else s.turnMoves=(s.turnMoves||0)+1;}
 // Special piece powers are explicit, validated intentions, like board moves.
 export function legalPowers(s,color=s.turn){
@@ -261,9 +265,9 @@ export function legalPowers(s,color=s.turn){
   }
   return actions;
 }
-export function reduce(s,action,color){
+function reduceAction(s,action,color){
   if(!s||!action||action.rev!==s.rev||!['w','b'].includes(color))return null;
-  const n=structuredClone(s),before=s.ply;
+  const n=structuredClone(s),before=s.ply;if(goEnabled(n))n.go.lastCapture=[];
   if(action.type==='rematch'&&s.result){if(!n.rematch.includes(color))n.rematch.push(color);n.rev++;return n;}
   if(s.result)return null;
   if(action.type==='resign'){n.result={winner:side(color),reason:'기권'};n.phase='over';n.rev++;return n;}
@@ -279,9 +283,20 @@ export function reduce(s,action,color){
     n.log.push({kind:'augment',color,ply:n.ply,text:card.name});if(color==='w')n.draftTurn='b';else{n.phase='play';n.draftTurn=null;n.seen={};n.seen[stateKey(n)]=1;n.result=terminal(n);if(n.result)n.phase='over';}n.rev++;return n;
   }
   if(s.phase!=='play')return null;
-  if(s.trolley){if(action.type!=='track'||color!==s.trolley.player||![0,1].includes(action.track))return null;for(const uid of s.trolley.tracks[action.track]){const i=n.board.findIndex(p=>p?.uid===uid);if(i>=0)V.remove(n,i,{force:true});}delete n.trolley;note(n,color,'트롤리 선로 '+(action.track+1)+' 선택');return conclude(n,before);}
+  if(s.trolley){if(action.type!=='track'||color!==s.trolley.player||![0,1].includes(action.track))return null;for(const uid of s.trolley.tracks[action.track]){const i=n.board.findIndex(p=>p?.uid===uid);if(i>=0)V.remove(n,i,{force:true});}delete n.trolley;note(n,color,'트롤리 선로 '+(action.track+1)+' 선택');return conclude(n,before,color);}
   if(s.turn!==color)return null;
   n.drawOffer=null;
+  if(action.type==='stone'){
+    if(!stonePosition(s,action.to,color))return null;
+    V.spawn(n,color,'stone',action.to);n.half=0;n.last={from:action.to,to:action.to};n.log.push({kind:'move',color,ply:n.ply+1,text:'● 착수 '+squareName(action.to)});
+    settleGo(n,color);endMove(n,color);return conclude(n,before,color);
+  }
+  if(action.type==='pass'&&goEnabled(s)){
+    if(s.forced[color]||s.turnMoves||s.turnCards)return null;
+    n.go.passes++;n.last=null;n.log.push({kind:'move',color,ply:n.ply+1,text:'패스'+(n.go.passes===1?' · 상대도 패스하면 계가':' · 계가')});n.accelerated=false;n.turnMoves=0;n.turnCards=0;finishTurn(n,color);
+    if(n.go.passes>=2){settleGo(n,color);n.result=terminal(n)||scoreResult(n);n.phase='over';n.rev++;return n;}
+    return conclude(n,before,color);
+  }
   if(action.type==='ability'){
     const card=CARDS.find(c=>c.id===action.id);if(!card?.active||!s.aug[color].includes(card.id)||!abilityRemaining(s,color,card.id)||(s.readyAt[color][card.id]||0)>s.ply)return null;
     if(['premove','trolley'].includes(card.key)&&(s.turnMoves||s.turnCards))return null;
@@ -289,10 +304,10 @@ export function reduce(s,action,color){
     if(!legalAbilities(s,color).some(a=>a.id===card.id))return null;
     castEffect(n,card.key,color,picks,action.choice);n.uses[color][card.id]--;n.turnCards=(n.turnCards||0)+1;
     if(n.randomCast){const temp=n.randomCast;delete n.randomCast;const original=n.aug[color];n.aug[color]=[...original,'ac-'+temp.key];n.uses[color]['ac-'+temp.key]=1;const randomAbility=legalAbilities(n,color).find(a=>a.id==='ac-'+temp.key);if(randomAbility)castEffect(n,temp.key,color,randomAbility.picks,randomAbility.choice);n.aug[color]=original;delete n.uses[color]['ac-'+temp.key];}
-    n.log.push({kind:'ability',color,ply:n.ply,text:card.name+(picks.length?' · '+picks.map(squareName).join(', '):'')});if(n.forceEnd){delete n.forceEnd;endMove(n,color);}return conclude(n,before);
+    n.log.push({kind:'ability',color,ply:n.ply,text:card.name+(picks.length?' · '+picks.map(squareName).join(', '):'')});if(n.forceEnd){delete n.forceEnd;endMove(n,color);}return conclude(n,before,color);
   }
   if(action.type==='power'){
-    const power=legalPowers(s,color).find(p=>p.from===action.from&&p.to===action.to&&p.spell===action.spell);if(!power)return null;const p=n.board[power.from];if(power.spell==='shield'){p.mana-=2;n.board[power.to].shieldUntil=n.ply+2;}if(power.spell==='meteor'){p.mana-=4;for(const to of [power.to,...around(power.to)])V.remove(n,to,{force:true});}if(power.spell==='buy'){n.gold[color]-=value(n.board[power.to])*5;n.board[power.to].c=color;n.board[power.to].bornAt=n.ply;}if(power.spell==='direction')p.direction=[Math.sign(row(power.to)-row(power.from)),Math.sign(col(power.to)-col(power.from))];note(n,color,power.label);endMove(n,color);return conclude(n,before);
+    const power=legalPowers(s,color).find(p=>p.from===action.from&&p.to===action.to&&p.spell===action.spell);if(!power)return null;const p=n.board[power.from];if(power.spell==='shield'){p.mana-=2;n.board[power.to].shieldUntil=n.ply+2;}if(power.spell==='meteor'){p.mana-=4;for(const to of [power.to,...around(power.to)])V.remove(n,to,{force:true});}if(power.spell==='buy'){n.gold[color]-=value(n.board[power.to])*5;n.board[power.to].c=color;n.board[power.to].bornAt=n.ply;}if(power.spell==='direction')p.direction=[Math.sign(row(power.to)-row(power.from)),Math.sign(col(power.to)-col(power.from))];note(n,color,power.label);endMove(n,color);return conclude(n,before,color);
   }
   if(action.type!=='move')return null;const m=legalMoves(s).find(m=>m.from===action.from&&m.to===action.to);if(!m)return null;
   const p=n.board[m.from],uid=p.uid,wasPawn=PAWNS.has(p.t),out=movePiece(n,m,action.promotion);n.last={from:m.from,to:m.to};
@@ -300,11 +315,19 @@ export function reduce(s,action,color){
   if(inCheck(n,side(color))){n.checks[color]++;n.initiativeBroken=true;}
   for(const {p:q,i}of V.own(n,color,q=>q.t==='log')){const [dr,dc]=q.direction||[color==='w'?-1:1,0],rr=row(i)+dr,cc=col(i)+dc;if(inside(rr,cc)&&!n.void.includes(rr*8+cc)){const to=rr*8+cc;if(n.board[to])V.remove(n,to,{force:true});n.board[i]=null;n.board[to]=q;}}
   const ep=wasPawn&&Math.abs(m.to-m.from)===16?[Math.floor((m.to+m.from)/2),m.to]:null;endMove(n,color,out.extra);if(ep&&n.turn!==color&&n.board[m.to]?.uid===uid)[n.ep,n.epVictim]=ep;
-  n.seen[stateKey(n)]=(n.seen[stateKey(n)]||0)+1;return conclude(n,before);
+  n.seen[stateKey(n)]=(n.seen[stateKey(n)]||0)+1;return conclude(n,before,color);
+}
+export function reduce(s,action,color){
+  const n=reduceAction(s,action,color);if(!n||!goEnabled(s))return n;
+  const boardAction=['move','stone','ability','power','track'].includes(action.type),changed=boardKey(n)!==boardKey(s);
+  if(boardAction&&changed&&boardKey(n)===s.go.koBoard)return null;
+  if(boardAction)n.go.passes=0;
+  if(n.ply!==s.ply){n.go.koBoard=boardKey(s);n.go.lastAction=action.type;}
+  return n;
 }
 export function evaluate(s,color){if(s.result)return s.result.winner===color?100000:s.result.winner?-100000:0;return s.board.reduce((sum,p,i)=>sum+(p?(p.c===color?1:p.c===side(color)?-1:0)*(value(p)*100+(!isRoyal(p)?(7-Math.abs(3.5-row(i))-Math.abs(3.5-col(i)))*3:0)):0),0);}
 export function aiAction(s,level='normal'){
   if(s.trolley)return {type:'track',track:s.trolley.tracks[0].length<s.trolley.tracks[1].length?0:1};
-  const actions=[...legalMoves(s).map(m=>({type:'move',...m})),...legalAbilities(s),...legalPowers(s)];let best=null,score=-Infinity;
-  for(const a of actions){const n=reduce(s,{...a,rev:s.rev},s.turn);if(!n)continue;const v=evaluate(n,s.turn)+(a.type==='ability'?2:0)+Math.random()*(level==='easy'?120:5);if(v>score){score=v;best=a;}}return best;
+  const actions=[...legalMoves(s).map(m=>({type:'move',...m})),...legalAbilities(s),...legalPowers(s),...legalStones(s),...(goEnabled(s)?[{type:'pass'}]:[])];let best=null,score=-Infinity;
+  for(const a of actions){const n=reduce(s,{...a,rev:s.rev},s.turn);if(!n)continue;let v=evaluate(n,s.turn)+(a.type==='ability'?2:0)+Math.random()*(level==='easy'?120:5);if(goEnabled(s)){const enemy=side(s.turn),danger=groups(n,s.turn).filter(g=>g.liberties.length===1).reduce((v,g)=>v+g.cells.reduce((v,i)=>v+(isRoyal(n.board[i])?30000:value(n.board[i])*70),0),0),pressure=groups(n,enemy).filter(g=>g.liberties.length===1).reduce((v,g)=>v+g.cells.length*15,0);v+=(n.go.prisoners[s.turn]-n.go.prisoners[enemy])*18-danger+pressure;if(a.type==='stone')v+=5;if(a.type==='pass')v-=25;}if(v>score){score=v;best=a;}}return best;
 }

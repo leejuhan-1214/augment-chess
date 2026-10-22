@@ -8,13 +8,14 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="viewport.css?v=2.0.0">
-  <link rel="stylesheet" href="abilities.css?v=3.0.0">
+  <link rel="stylesheet" href="abilities.css?v=3.1.0">
+  <link rel="stylesheet" href="go.css?v=3.1.0">
   <script src="peerjs.min.js" defer></script>
-  <script src="app.js?v=3.0.0" type="module"></script>
+  <script src="app.js?v=3.1.0" type="module"></script>
 </head>
 <body>
   <header class="topbar">
-    <a href="./?v=3.0.0" class="brand" aria-label="증강체스 홈"><span class="brand-icon">♞<i>✦</i></span><span>AUGMENT<span class="brand-light">CHESS</span></span><span class="beta">BETA</span></a>
+    <a href="./?v=3.1.0" class="brand" aria-label="증강체스 홈"><span class="brand-icon">♞<i>✦</i></span><span>AUGMENT<span class="brand-light">CHESS</span></span><span class="beta">BETA</span></a>
     <nav><button id="match-details" class="text-button">대전 기록</button><button id="howto" class="text-button">플레이 가이드 <span>↗</span></button><a class="source-link" href="https://github.com/leejuhan-1214/augment-chess" target="_blank" rel="noopener">GitHub <span>↗</span></a></nav>
   </header>
   <main>
@@ -24,7 +25,7 @@
         <section class="panel lobby-panel" id="lobby">
           <div class="section-label">PLAY TOGETHER <span class="live-dot"></span></div>
           <h2>다음 상대는,<br>당신의 친구.</h2><p class="muted">링크 하나로 같은 체스판에.<br>로그인 없이 바로 시작하세요.</p>
-          <button id="create-room" class="button primary"><span>✦</span> 온라인 방 만들기 <span>→</span></button>
+          <label class="rule-picker" for="rule-mode"><span>게임 규칙</span><select id="rule-mode"><option value="go-chess">바둑 × 체스 + 증강</option><option value="ac272">증강체스</option></select></label><button id="create-room" class="button primary"><span>✦</span> 온라인 방 만들기 <span>→</span></button>
           <div class="or"><span></span> 또는 방 코드로 참여 <span></span></div>
           <form id="join-form"><label class="sr-only" for="room-input">방 코드</label><div class="join-row"><input id="room-input" placeholder="8자리 방 코드" maxlength="8" autocomplete="off" spellcheck="false" required pattern="[A-Za-z0-9]{8}"><button class="button join" type="submit" aria-label="방 참여">→</button></div></form>
           <p class="network-note">친구와 1:1 · WebRTC 실시간 연결</p>
@@ -38,7 +39,7 @@
           <p class="network-note">방을 만든 사람은 백, 입장한 사람은 흑입니다. 양쪽 모두 이 탭을 열어 두세요.</p>
           <button id="reconnect" class="button secondary" hidden>다시 연결하기</button><button id="leave-room" class="text-button leave">방 나가기</button>
         </section>
-        <section class="panel augment-panel"><div class="section-label">YOUR AUGMENTS <span id="augment-count">0 / 3</span></div><div id="my-augments"><div class="empty-aug"><span>✧</span><p>가능성은 아직 열려 있어요.<small>대전을 시작하고 첫 증강을 선택하세요.</small></p></div></div><p id="skill-hint" hidden></p><button id="finish-skill" class="button secondary" hidden>선택 완료</button><div id="piece-powers"></div><button id="cancel-skill" class="text-button" hidden>스킬 선택 취소 ×</button></section>
+        <section class="panel go-panel" id="go-controls" hidden><div class="section-label">BADUK × CHESS <span>● + ♞</span></div><div class="go-buttons"><button id="go-move" class="go-choice" aria-pressed="true">기물 이동</button><button id="go-place" class="go-choice" aria-pressed="false">돌 놓기</button></div><p id="go-hint"></p><p id="go-liberties" aria-live="polite"></p><div class="go-stats"><span id="go-captures"></span><span id="go-score"></span></div><button id="go-pass" class="text-button">패스</button></section><section class="panel augment-panel"><div class="section-label">YOUR AUGMENTS <span id="augment-count">0 / 3</span></div><div id="my-augments"><div class="empty-aug"><span>✧</span><p>가능성은 아직 열려 있어요.<small>대전을 시작하고 첫 증강을 선택하세요.</small></p></div></div><p id="skill-hint" hidden></p><button id="finish-skill" class="button secondary" hidden>선택 완료</button><div id="piece-powers"></div><button id="cancel-skill" class="text-button" hidden>스킬 선택 취소 ×</button></section>
         <div class="tiny-note"><span>✧</span> 같은 판은 두 번 오지 않습니다.</div>
       </aside>
       <section class="board-section" aria-label="체스 대전">

@@ -1,12 +1,13 @@
-import {CARDS,PIECES} from './game-engine.js?v=3.0.0';
+import {CARDS,PIECES} from './game-engine.js?v=3.1.0';
 const ACTIVE='ac-active-v3',DAY=24*60*60*1000;
 const ids=new Set(CARDS.map(c=>c.id));
 const validToken=t=>typeof t==='string'&&t.length>0&&t.length<=80;
 const validCode=c=>typeof c==='string'&&/^[A-Z0-9]{8}$/.test(c);
 const read=(storage,key)=>{try{return storage?.getItem(key);}catch{return null;}};
 const write=(storage,key,value)=>{try{storage?.setItem(key,value);return !!storage;}catch{return false;}};
+const validGo=g=>g===undefined||(g?.enabled===true&&Number.isInteger(g.passes)&&g.passes>=0&&g.passes<=2&&['w','b'].every(c=>Number.isSafeInteger(g.prisoners?.[c])&&g.prisoners[c]>=0)&&(g.koBoard===null||typeof g.koBoard==='string'&&g.koBoard.length<=5000)&&Array.isArray(g.lastCapture)&&g.lastCapture.every(i=>Number.isInteger(i)&&i>=0&&i<64));
 export function validSnapshot(s){
-  return !!s&&Array.isArray(s.board)&&s.board.length===64&&s.board.every(p=>p===null||(p&&['w','b',...(s.variant==='ac272'?['x']:[])].includes(p.c)&&(s.variant==='ac272'?Object.hasOwn(PIECES,p.t):'pnbrqk'.includes(p.t)&&p.t.length===1)))&&
+  return !!s&&validGo(s.go)&&Array.isArray(s.board)&&s.board.length===64&&s.board.every(p=>p===null||(p&&['w','b',...(s.variant==='ac272'?['x']:[])].includes(p.c)&&(p.t!=='stone'||s.go?.enabled===true)&&(s.variant==='ac272'?Object.hasOwn(PIECES,p.t):'pnbrqk'.includes(p.t)&&p.t.length===1)))&&
     Number.isInteger(s.rev)&&s.rev>=0&&Number.isInteger(s.ply)&&s.ply>=0&&['draft','play','over'].includes(s.phase)&&['w','b'].includes(s.turn)&&
     Array.isArray(s.log)&&Array.isArray(s.rematch)&&['w','b'].every(c=>Array.isArray(s.aug?.[c])&&s.aug[c].every(id=>ids.has(id))&&Array.isArray(s.offers?.[c])&&s.offers[c].every(id=>ids.has(id))&&Array.isArray(s.castle?.[c]));
 }
